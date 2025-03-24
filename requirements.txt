@@ -1,0 +1,8 @@
+async-timeout
+dnspython
+fun-things
+generic-consumer
+lazy-main
+python-dotenv
+simple-chalk
+typing-extensions
