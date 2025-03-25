@@ -111,6 +111,43 @@ Carabao comes with a few built-in consumers:
 
 - **PrettyEnv**: Outputs environment variables in a readable format
 - **NetworkHealth**: Monitors network connectivity and service health
+- **LogToDB**: Logs exceptions to a MongoDB database
+
+### Using LogToDB Consumer
+
+The LogToDB consumer is designed to capture and store exceptions in a MongoDB collection.
+
+```python
+from carabao.consumers import LogToDB
+from pymongo import MongoClient
+
+# Connect to MongoDB and get collection
+client = MongoClient("mongodb://localhost:27017/")
+db = client["your_database"]
+collection = db["exceptions"]
+
+# Configure LogToDB
+LogToDB.name = "your_service_name"  # Default is POD_NAME
+LogToDB.storage = collection  # Must be a MongoDB collection
+
+# Now any exceptions caught by the framework will be logged to the database
+```
+
+The LogToDB consumer stores exception data in the following format:
+
+```python
+@dataclass
+class Document:
+    name: str  # Service/pod name
+    exceptions: List[str]  # List of exception strings
+    date_created: datetime  # UTC timestamp
+```
+
+You can customize how documents are converted to dictionaries by setting the `document_selector` attribute:
+
+```python
+LogToDB.document_selector = your_custom_document_converter_function
+```
 
 ## CLI Commands
 
