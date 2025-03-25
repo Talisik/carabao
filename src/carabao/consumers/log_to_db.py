@@ -5,22 +5,23 @@ from typing import Any, Callable, List
 
 from generic_consumer import PassiveConsumer
 
-from carabao import POD_NAME
+from ..constants import POD_NAME
 
 
 class LogToDB(PassiveConsumer):
     """
     A passive consumer that logs exceptions to a database.
-    
+
     This consumer monitors for exceptions and stores them in a MongoDB collection
     when the storage attribute is properly configured. It uses a Document dataclass
     to structure the data before saving it to the database.
-    
+
     Attributes:
         name (str): The name identifier for the logs, defaults to POD_NAME
         storage (Any): The database storage object, typically a MongoDB collection
         document_selector (Callable): Function to convert Document to dict format
     """
+
     @dataclass
     class Document:
         name: str
