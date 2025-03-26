@@ -29,11 +29,25 @@ class LogToDB(PassiveConsumer):
         date_created: datetime
 
     name: str = POD_NAME
+    """
+    The name identifier for the logs.
+    """
     storage: Any = None
+    """
+    The database storage object.
+
+    """
     document_selector: Callable[
         ["LogToDB.Document"],
         dict,
     ] = dataclasses.asdict
+    """
+    Function to convert Document to dict format.
+    """
+    log_without_errors: bool = False
+    """
+    If True, the consumer will log the payloads even if there are no errors.
+    """
 
     @classmethod
     def hidden(cls):
@@ -75,15 +89,14 @@ class LogToDB(PassiveConsumer):
         if self.__class__.storage == None:
             return
 
+        __errors = self.kwargs.get("__errors", [])
+
+        if not self.__class__.log_without_errors and not __errors:
+            return
+
         document = LogToDB.Document(
             name=self.__class__.name,
-            exceptions=[
-                str(error)
-                for error in self.kwargs.get(
-                    "__errors",
-                    [],
-                )
-            ],
+            exceptions=list(map(str, __errors)),
             date_created=datetime.now(timezone.utc),
         )
 
