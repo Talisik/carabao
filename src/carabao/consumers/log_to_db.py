@@ -160,6 +160,9 @@ class LogToDB(PassiveConsumer):
             else self.kwargs.get("__errors_str", [])
         )
 
+        if not __errors_str:
+            return
+
         now = datetime.now(timezone.utc)
 
         if self.__process_mongo(
