@@ -1,7 +1,7 @@
 import dataclasses
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Iterable, Optional
+from typing import Any, Callable, List, Optional
 
 from generic_consumer import PassiveConsumer
 
@@ -48,7 +48,9 @@ class LogToDB(PassiveConsumer):
     """
     If True, the consumer will log the payloads even if there are no errors.
     """
-    expiration_time_s: int = 60 * 60  # 1 hour
+    expiration_time: timedelta = timedelta(
+        hours=1,
+    )
     """
     The expiration time for log documents in the database.
     """
@@ -69,60 +71,10 @@ class LogToDB(PassiveConsumer):
     def condition(cls, queue_name: str):
         return cls.storage != None
 
-    @classmethod
-    def set_expiration_time(
-        cls,
-        /,
-        seconds: Optional[int] = None,
-        minutes: Optional[int] = None,
-        hours: Optional[int] = None,
-        days: Optional[int] = None,
-        weeks: Optional[int] = None,
-    ):
-        """
-        Set the expiration time for log documents in the database.
-
-        Args:
-            seconds: Expiration time in seconds
-            minutes: Expiration time in minutes
-            hours: Expiration time in hours
-            days: Expiration time in days
-            weeks: Expiration time in weeks
-
-        Raises:
-            ValueError: If no valid time parameter is provided
-
-        Note:
-            Only one time parameter should be provided. If multiple are given,
-            the first valid one will be used in the following order:
-            seconds, minutes, hours, days, weeks.
-        """
-        if seconds is not None:
-            cls.expiration_time_s = seconds
-            return
-
-        if minutes is not None:
-            cls.expiration_time_s = minutes * 60
-            return
-
-        if hours is not None:
-            cls.expiration_time_s = hours * 60 * 60
-            return
-
-        if days is not None:
-            cls.expiration_time_s = days * 24 * 60 * 60
-            return
-
-        if weeks is not None:
-            cls.expiration_time_s = weeks * 7 * 24 * 60 * 60
-            return
-
-        raise ValueError("Invalid expiration time")
-
     def __process_mongo(
         self,
         storage,
-        documents: Iterable["LogToDB.Document"],
+        documents: List["LogToDB.Document"],
     ):
         try:
             from pymongo import InsertOne
@@ -164,20 +116,18 @@ class LogToDB(PassiveConsumer):
             return
 
         now = datetime.now(timezone.utc)
+        documents = [
+            LogToDB.Document(
+                name=self.__class__.name,
+                error=error,
+                date_created=now,
+                date_expiration=now + self.__class__.expiration_time,
+            )
+            for error in __errors_str
+        ]
 
         if self.__process_mongo(
             self.__class__.storage,
-            (
-                LogToDB.Document(
-                    name=self.__class__.name,
-                    error=error,
-                    date_created=now,
-                    date_expiration=now
-                    + timedelta(
-                        seconds=self.__class__.expiration_time_s,
-                    ),
-                )
-                for error in __errors_str
-            ),
+            documents,
         ):
             return
