@@ -103,7 +103,12 @@ class LogToDB(PassiveConsumer):
         return False
 
     def process(self, payloads: list):
-        if self.__class__.storage == None:
+        storage = self.__class__.storage
+
+        if isinstance(storage, Callable):
+            storage = storage()
+
+        if storage == None:
             return
 
         __errors_str = (
@@ -127,7 +132,7 @@ class LogToDB(PassiveConsumer):
         ]
 
         if self.__process_mongo(
-            self.__class__.storage,
+            storage,
             documents,
         ):
             return
