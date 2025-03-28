@@ -103,14 +103,6 @@ class LogToDB(PassiveConsumer):
         return False
 
     def process(self, payloads: list):
-        storage = self.__class__.storage
-
-        if isinstance(storage, Callable):
-            storage = storage()
-
-        if storage == None:
-            return
-
         __errors_str = (
             self.kwargs.get("__errors_stacktrace", [])
             if self.__class__.use_stacktrace
@@ -118,6 +110,14 @@ class LogToDB(PassiveConsumer):
         )
 
         if not __errors_str:
+            return
+
+        storage = self.__class__.storage
+
+        if isinstance(storage, Callable):
+            storage = storage()
+
+        if storage == None:
             return
 
         now = datetime.now(timezone.utc)

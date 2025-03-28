@@ -6,3 +6,4 @@ lazy-main
 python-dotenv
 simple-chalk
 typing-extensions
+pymongo
