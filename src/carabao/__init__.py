@@ -11,6 +11,7 @@ from .constants import (  # ROOT_FOLDER_NAME,
 )
 from .core import Core
 from .lanes import *
+from .settings import Settings
 
 try:
     from .constants import mongo
