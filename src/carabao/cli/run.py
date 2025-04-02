@@ -1,10 +1,13 @@
 import curses
 import os
-from argparse import ArgumentParser, _SubParsersAction
+from argparse import _SubParsersAction
 
-from ..cfg import CFG
-from ..constants import FRAMEWORK_MAIN_FILE
+from l2l import Lane
+
+from ..cfg.secret_cfg import SecretCFG
+from ..core import Core
 from ..curses import CursesButton, CursesList, CursesText
+from ..settings import Settings
 
 
 class Display(CursesList):
@@ -53,12 +56,12 @@ class Display(CursesList):
             )
         )
 
-        cfg = CFG()
+        cfg = SecretCFG()
 
-        queue_names = [*cfg.active_consumers]
+        queue_names = [*cfg.primary_lanes]
 
         if not any(queue_names):
-            raise Exception("No consumers found!")
+            raise Exception("No lanes found!")
 
         last_run_queue_name = cfg.last_run_queue_name
 
@@ -84,36 +87,18 @@ class Display(CursesList):
 
 def _main(args):
     queue_name: str = args.queue_name
-    main_file = FRAMEWORK_MAIN_FILE
-    template = "{fields} python3 {main_file}"
 
     if queue_name.strip() != "":
-        os.system(
-            template.format(
-                fields=f"QUEUE_NAME={queue_name}",
-                main_file=main_file,
-            ),
-        )
+        os.environ["QUEUE_NAME"] = queue_name
+
+        Core.start()
         return
 
-    # Run the program once but disable framework startup.
-    # This will generate the framework's `.cfg` file.
-
-    fields = "{0}={1} {2}={3} {4}={5}".format(
-        "QUEUE_NAME",
-        "",
-        "CARABAO_CONFIG",
-        "DISCRETE",
-        "CARABAO_STARTUP",
-        "DISABLED",
-    )
-
-    os.system(
-        template.format(
-            fields=fields,
-            main_file=main_file,
-        ),
-    )
+    _ = [
+        lane
+        for lane_directory in Settings.get().lane_directories
+        for lane in Lane.load(lane_directory)
+    ]
 
     # Draw the display.
 
@@ -124,12 +109,9 @@ def _main(args):
 
     # Run the program again.
 
-    os.system(
-        template.format(
-            fields=f"QUEUE_NAME={queue_name}",
-            main_file=main_file,
-        ),
-    )
+    os.environ["QUEUE_NAME"] = queue_name
+
+    Core.start()
 
 
 def do(subparsers: _SubParsersAction):

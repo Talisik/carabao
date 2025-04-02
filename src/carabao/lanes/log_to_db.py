@@ -3,33 +3,21 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, List, Optional
 
-from generic_consumer import PassiveConsumer
+from l2l import Lane
 
 from ..constants import POD_NAME
 
 
-class LogToDB(PassiveConsumer):
-    """
-    A passive consumer that logs exceptions to a database.
-
-    This consumer monitors for exceptions and stores them in a MongoDB collection
-    when the storage attribute is properly configured. It uses a Document dataclass
-    to structure the data before saving it to the database.
-
-    Attributes:
-        name (str): The name identifier for the logs, defaults to POD_NAME
-        storage (Any): The database storage object, typically a MongoDB collection
-        document_selector (Callable): Function to convert Document to dict format
-    """
-
+class LogToDB(Lane):
     @dataclass
     class Document:
-        name: str
+        label: str
+        type: str
         error: str
         date_created: datetime
         date_expiration: datetime
 
-    name: str = POD_NAME
+    label: str = POD_NAME
     """
     The name identifier for the logs.
     """
@@ -46,7 +34,7 @@ class LogToDB(PassiveConsumer):
     """
     log_without_errors: bool = False
     """
-    If True, the consumer will log the payloads even if there are no errors.
+    If True, the lane will log the payloads even if there are no errors.
     """
     expiration_time: timedelta = timedelta(
         hours=1,
@@ -56,19 +44,19 @@ class LogToDB(PassiveConsumer):
     """
     use_stacktrace: bool = True
     """
-    If True, the consumer will log the stack trace of the error.
+    If True, the lane will log the stack trace of the error.
     """
 
     @classmethod
-    def hidden(cls):
-        return False
+    def primary(cls) -> bool:
+        return True
 
     @classmethod
     def priority_number(cls):
         return -100
 
     @classmethod
-    def condition(cls, queue_name: str):
+    def condition(cls, name: str):
         return cls.storage != None
 
     def __process_mongo(
@@ -102,11 +90,11 @@ class LogToDB(PassiveConsumer):
 
         return False
 
-    def process(self, payloads: list):
+    def process(self, value):
         __errors_str = (
-            self.kwargs.get("__errors_stacktrace", [])
+            list(self.global_errors_stacktrace())
             if self.__class__.use_stacktrace
-            else self.kwargs.get("__errors_str", [])
+            else list(self.global_errors_str())
         )
 
         if not __errors_str:
@@ -123,7 +111,8 @@ class LogToDB(PassiveConsumer):
         now = datetime.now(timezone.utc)
         documents = [
             LogToDB.Document(
-                name=self.__class__.name,
+                label=self.__class__.label,
+                type="error",
                 error=error,
                 date_created=now,
                 date_expiration=now + self.__class__.expiration_time,

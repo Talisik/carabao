@@ -5,6 +5,7 @@ if __name__ == "__main__":
         entry_points={
             "console_scripts": {
                 "carabao = carabao.cli:cli",
+                "moo = carabao.cli:cli",
             }
         },
     )

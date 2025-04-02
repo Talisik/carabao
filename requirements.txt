@@ -1,9 +1,11 @@
 async-timeout
 dnspython
 fun-things
-generic-consumer
 lazy-main
 python-dotenv
 simple-chalk
 typing-extensions
 pymongo
+redis
+elasticsearch
+lane2lane @ git+https://github.com/Talisik/lane2lane.git

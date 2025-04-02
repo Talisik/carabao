@@ -1,4 +1,5 @@
 import os
+from typing import Literal
 
 from dotenv import load_dotenv
 from fun_things.environment import env
@@ -13,16 +14,7 @@ def __environment(value):
     if value == "production":
         return "production"
 
-    raise Exception(f"Invalid environment '{value}'!")
-
-
-def __core_startup(value):
-    value = value.upper()
-
-    if value not in ["ENABLED", "DISABLED", "AUTO_START"]:
-        raise Exception(f"Invalid core startup '{value}'!")
-
-    return value
+    raise ValueError(f"Invalid environment '{value}'!")
 
 
 # ROOT_FOLDER_NAME = pathlib.Path(os.getcwd()).name
@@ -31,70 +23,6 @@ def __core_startup(value):
 # """
 
 FRAMEWORK_NAME = "CARABAO"
-FRAMEWORK_AUTO_INITIALIZE = env(
-    f"{FRAMEWORK_NAME}_AUTO_INITIALIZE",
-    cast=bool,
-    default=True,
-)
-"""
-If the framework should be initialized upon import.
-"""
-FRAMEWORK_STARTUP = env(
-    f"{FRAMEWORK_NAME}_STARTUP",
-    cast=__core_startup,
-    default="AUTO_START",
-)
-"""
-The behaviour of the framework on how it should start.
-
-`ENABLED` =
-The framework can be started.
-
-`DISABLED` =
-The framework cannot be started.
-This does not throw an error.
-
-`AUTO_START` =
-The framework starts automatically.
-It can still be started manually.
-Happens when the process is about to exit.
-"""
-FRAMEWORK_MAIN_FILE = env(
-    f"{FRAMEWORK_NAME}_MAIN_FILE",
-    cast=str,
-    default=".",
-)
-"""
-The location of the main file to be executed.
-
-This is used by the CLI.
-"""
-FRAMEWORK_START_WITH_ERROR = env(
-    f"{FRAMEWORK_NAME}_START_WITH_ERROR",
-    cast=bool,
-    default=False,
-)
-"""
-If the framework should still auto-start regardless
-if there was an error.
-"""
-FRAMEWORK_CONFIG = env(
-    f"{FRAMEWORK_NAME}_CONFIG",
-    cast=str,
-    default="ENABLED",
-)
-"""
-If the framework should write a `.cfg` file.
-
-`ENABLED` =
-The framework will write the entire `.cfg` file.
-
-`DISCRETE` =
-The framework will write the list of consumers only.
-
-`DISABLED` =
-The framework will not write the `.cfg` file.
-"""
 FRAMEWORK_DEPLOY_SAFELY = env(
     f"{FRAMEWORK_NAME}_DEPLOY_SAFELY",
     cast=bool,
@@ -105,10 +33,6 @@ If `True`,
 things that might be bad in a proper deployment will be adjusted,
 such as testing-related stuff.
 """
-
-CONFIG_NAME = ".ignore.carabao.cfg"
-CONFIG_LAST_RUN = "last_run"
-CONFIG_CONSUMERS = "consumers"
 
 POD_NAME = env(
     "POD_NAME",

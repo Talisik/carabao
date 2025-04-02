@@ -2,13 +2,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fun_things import ping
-from generic_consumer import PassiveConsumer
+from l2l import Lane
 
 from ..helpers.stdout_catcher import StdOutCatcher
 
 
-class NetworkHealth(PassiveConsumer):
-    name: str = "unknown"
+class NetworkHealth(Lane):
+    label: str = "unknown"
     storage: Any = None
     catcher = StdOutCatcher()
 
@@ -21,7 +21,7 @@ class NetworkHealth(PassiveConsumer):
         return 200
 
     @classmethod
-    def condition(cls, queue_name: str):
+    def condition(cls, name: str):
         return cls.storage != None
 
     def __process_mongo(
@@ -59,7 +59,7 @@ class NetworkHealth(PassiveConsumer):
 
         return True
 
-    def process(self, payloads: list):
+    def process(self, value):
         if self.__class__.storage == None:
             return
 

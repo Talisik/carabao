@@ -1,108 +1,17 @@
-import atexit
 import logging
-import sys
-from types import TracebackType
-from typing import Callable, List, Literal, Optional, Type, final
+from typing import final
 
-from generic_consumer import GenericConsumer, logger
+from l2l import LOGGER, Lane
 from lazy_main import LazyMain
 
-from .cfg import CFG
-from .constants import (
-    EXIT_DELAY,
-    EXIT_ON_FINISH,
-    FRAMEWORK_AUTO_INITIALIZE,
-    FRAMEWORK_CONFIG,
-    FRAMEWORK_START_WITH_ERROR,
-    FRAMEWORK_STARTUP,
-    QUEUE_NAME,
-    SINGLE_RUN,
-    SLEEP_MAX,
-    SLEEP_MIN,
-    TESTING,
-)
+from .constants import QUEUE_NAME, TESTING
+from .settings import Settings
 
 
 @final
 class Core:
-    startup: Literal[
-        "AUTO_START",
-        "ENABLED",
-        "DISABLED",
-    ] = FRAMEWORK_STARTUP  # type: ignore
-    config: Literal[
-        "ENABLED",
-        "DISCRETE",
-        "DISABLED",
-    ] = FRAMEWORK_CONFIG  # type: ignore
-    __started = False
-    __initialized = False
-    __excepthook = sys.excepthook
-    __exception: BaseException = None  # type: ignore
-    __error_handlers: List[Callable[[Exception], None]] = []
-    __exit_handlers: List[Callable] = []
-
     def __init__(self):
         raise Exception("This is not instantiable!")
-
-    @classmethod
-    def initialize(cls):
-        """
-        Initializes the module.
-
-        This is automatically called if the environment
-        `CARABAO_AUTO_INITIALIZE` is `True`.
-
-        This module can only initialize once.
-        """
-        if cls.__initialized:
-            return
-
-        logger.setLevel(logging.DEBUG if TESTING else logging.INFO)
-
-        sys.excepthook = Core.__excepthook_wrapper
-
-        cls.__initialized = True
-
-    @classmethod
-    def add_error_handler(
-        cls,
-        fn: Callable[[Exception], None],
-    ):
-        cls.__error_handlers.append(fn)
-
-    @classmethod
-    def add_exit_handler(
-        cls,
-        fn: Callable,
-    ):
-        cls.__exit_handlers.append(fn)
-
-    @classmethod
-    def __error_handler(cls, e: Exception):
-        for handler in cls.__error_handlers:
-            try:
-                handler(e)
-            except:
-                pass
-
-    @classmethod
-    def __exit_handler(cls):
-        for handler in cls.__exit_handlers:
-            try:
-                handler()
-            except:
-                pass
-
-    @classmethod
-    def __excepthook_wrapper(
-        cls,
-        type: Type[BaseException],
-        value: BaseException,
-        traceback: Optional[TracebackType],
-    ):
-        cls.__excepthook(type, value, traceback)
-        cls.__exception = value
 
     @classmethod
     def start(cls):
@@ -123,9 +32,6 @@ class Core:
 
         This module can only start once.
         """
-        if Core.startup == "DISABLED":
-            return
-
         if cls.__started:
             return
 
@@ -133,29 +39,32 @@ class Core:
 
     @classmethod
     def __start(cls):
+        LOGGER().setLevel(logging.DEBUG if TESTING else logging.INFO)
+
+        settings = Settings.get()
         cls.__started = True
 
         if QUEUE_NAME == None:
             raise Exception("'QUEUE_NAME' is not in the environment!")
 
         main = LazyMain(
-            main=GenericConsumer.start,
-            run_once=SINGLE_RUN,
-            sleep_min=SLEEP_MIN,
-            sleep_max=SLEEP_MAX,
-            exit_on_finish=EXIT_ON_FINISH,
-            exit_delay=EXIT_DELAY,
-            error_handler=cls.__error_handler,
+            main=Lane.start,
+            run_once=settings.run_once,
+            sleep_min=settings.sleep_min,
+            sleep_max=settings.sleep_max,
+            exit_on_finish=settings.exit_on_finish,
+            exit_delay=settings.exit_delay,
+            error_handler=settings.error_handler,
         )
-        print_consumers = True
+        print_lanes = True
 
         for loop in main:
             loop(
                 QUEUE_NAME,
-                print_consumers=print_consumers,
+                print_lanes=print_lanes,
             )
 
-            print_consumers = False
+            print_lanes = False
 
         try:
             from .constants import mongo
@@ -180,35 +89,3 @@ class Core:
 
         except:
             pass
-
-        cls.__exit_handler()
-
-    @staticmethod
-    @atexit.register
-    def __atexit():
-        if Core.config != "DISABLED":
-            cfg = CFG()
-
-            if Core.config != "DISCRETE":
-                cfg.write_last_run()
-
-            cfg.write_consumers()
-
-            cfg.save()
-
-        if Core.startup != "AUTO_START":
-            return
-
-        if Core.__started:
-            return
-
-        start_with_error = FRAMEWORK_START_WITH_ERROR
-
-        if not start_with_error and Core.__exception != None:
-            return
-
-        Core.__start()
-
-
-if FRAMEWORK_AUTO_INITIALIZE:
-    Core.initialize()

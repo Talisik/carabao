@@ -1,32 +1,44 @@
 # Carabao
 
 ```
-                                                           +:   
-   -                                                        *-  
-  -*                                                        +-- 
+                                                           +:
+   -                                                        *-
+  -*                                                        +--
  -*                                                          *=:
 -=*                                                         +=+-
 -+*                                                        +==*-
-++=*                                                      **=+- 
- *==*+                                                 -**==*-  
-  -***=*++                                         -*=**=**-%   
-   %-****=*===----------#*%*##+%#@#**-*---------===**+=-%-#     
-      **=-***-=*==*==--****%#%%@*@@%#*-----+*=++%++++%%*        
-          *%%%#%####%##%*#%%=##@++%@%%######%%%%#%@             
-               + @%@@@@##%#=@#@@+++@@%                          
-             --+++++##%@%#=@@+@@%%@#@#++++=%                    
-           @+*@@@@@@##@##*=**+*@%%%@#@+@@#@++%                  
-              #*       *#**##+#%%%*@ %%%%++++#+                 
-                       *+****+#%%%*@                            
-                       **=*==+#%##*                             
-                        *=*=+*#%#*                              
-                        #=*****#*                               
-                       #@=***#@##                               
-                       %%=%%%#=#%#                              
-                       ####%%%#                                 
+++=*                                                      **=+-
+ *==*+                                                 -**==*-
+  -***=*++                                         -*=**=**-%
+   %-****=*===----------#*%*##+%#@#**-*---------===**+=-%-#
+      **=-***-=*==*==--****%#%%@*@@%#*-----+*=++%++++%%*
+          *%%%#%####%##%*#%%=##@++%@%%######%%%%#%@
+               + @%@@@@##%#=@#@@+++@@%
+             --+++++##%@%#=@@+@@%%@#@#++++=%
+           @+*@@@@@@##@##*=**+*@%%%@#@+@@#@++%
+              #*       *#**##+#%%%*@ %%%%++++#+
+                       *+****+#%%%*@
+                       **=*==+#%##*
+                        *=*=+*#%#*
+                        #=*****#*
+                       #@=***#@##
+                       %%=%%%#=#%#
+                       ####%%%#
 ```
 
-A Python library for building pub/sub consumer-based frameworks.
+A Python library for building robust publisher-subscriber (pub/sub) frameworks with built-in lanes for common tasks.
+
+## Features
+
+- Core framework for managing pub/sub systems
+- Built-in lanes for:
+  - Database logging (`LogToDB`)
+  - Network health monitoring (`NetworkHealth`)
+  - Environment variable display (`PrettyEnv`)
+- Automatic configuration management
+- Error handling with custom error handlers
+- Clean shutdown with exit handlers
+- Command-line interface for management
 
 ## Installation
 
@@ -34,186 +46,128 @@ A Python library for building pub/sub consumer-based frameworks.
 pip install git+https://github.com/Talisik/carabao.git
 ```
 
-## Features
-
-- Built on top of generic-consumer for robust pub/sub functionality
-- Pre-configured connections to Redis and MongoDB
-- Automatic consumer registration and queue naming
-- Configurable batch processing
-- Environment-based configuration
-- Support for different deployment environments (staging, production)
-- Graceful error handling and recovery
-- CLI interface for managing consumers
-- Minimal boilerplate code required
-
-## Quick Start
-
-Simply import the package to automatically initialize and start the framework:
-
-```python
-import carabao
-
-# Your application code here
-```
-
-## Architecture
-
-Carabao follows a publisher-subscriber architecture:
-
-1. **Publishers** send messages to named queues
-2. **Consumers** process messages from specific queues
-3. **Core Framework** handles connections, message routing, and lifecycle management
-
-The framework automatically discovers and registers consumer classes, manages connections to Redis and MongoDB, and handles the message processing lifecycle.
-
-## Consumer Framework
-
-### Creating Consumers
-
-Extend the base consumer classes to create your own consumers:
-
-```python
-from carabao.consumers import BaseConsumer
-
-class MyConsumer(BaseConsumer):
-    def process(self, message):
-        # Process your message here
-        print(f"Processing: {message}")
-```
-
-### Queue Names
-
-Queue names are automatically generated based on the class name, in uppercase separated by underscores:
-
-```python
-class HelloWorld(BaseConsumer): # Queue name: HELLO_WORLD
-    pass
-
-class AISearch(BaseConsumer): # Queue name: AI_SEARCH
-    pass
-
-class RedditETL1(BaseConsumer): # Queue name: REDDIT_ETL_1
-    pass
-```
-
-You can override this behavior:
-
-```python
-class HelloWorld(BaseConsumer):
-    @classmethod
-    def queue_name(cls):
-        return "MY_CUSTOM_QUEUE_NAME"
-```
-
-## Built-in Consumers
-
-Carabao comes with a few built-in consumers:
-
-- **PrettyEnv**: Outputs environment variables in a readable format
-- **NetworkHealth**: Monitors network connectivity and service health
-- **LogToDB**: Logs exceptions to a MongoDB database
-
-### Using LogToDB Consumer
-
-The LogToDB consumer is designed to capture and store exceptions in a MongoDB collection.
-
-```python
-from carabao.consumers import LogToDB
-from pymongo import MongoClient
-
-# Connect to MongoDB and get collection
-client = MongoClient("mongodb://localhost:27017/")
-db = client["your_database"]
-collection = db["exceptions"]
-
-# Configure LogToDB
-LogToDB.name = "your_service_name"  # Default is POD_NAME
-LogToDB.storage = collection  # Must be a MongoDB collection
-
-# Now any exceptions caught by the framework will be logged to the database
-```
-
-The LogToDB consumer stores exception data in the following format:
-
-```python
-@dataclass
-class Document:
-    name: str  # Service/pod name
-    exceptions: List[str]  # List of exception strings
-    date_created: datetime  # UTC timestamp
-```
-
-You can customize how documents are converted to dictionaries by setting the `document_selector` attribute:
-
-```python
-LogToDB.document_selector = your_custom_document_converter_function
-```
-
-## CLI Commands
-
-Carabao includes a command-line interface for managing consumers:
-
-```sh
-# Run a specific consumer
-carabao run --queue QUEUE_NAME
-
-# See all available commands
-carabao --help
-```
-
-## Configuration
-
-The following environment variables can be used to configure the framework:
-
-### Core Settings
-
-- `ENVIRONMENT` (str): Deployment environment (`staging` or `production`). Default: `staging`
-- `SINGLE_RUN` (bool): If consumers should only run once. Default: `True`
-- `QUEUE_NAME` (str) [REQUIRED]: Consumers with the same name are selected
-- `BATCH_SIZE` (int): Number of payloads retrieved at once. Default: `1`
-- `POD_NAME` (str): Name of the current pod in Kubernetes environments. Default: `None`
-- `POD_INDEX` (int): Index of the current pod in Kubernetes environments. Default: `0`
-
-### MongoDB Settings
-
-- `MONGO_URI` (str): MongoDB connection string. Default: `mongodb://localhost:27017/`
-- Aliases: `MONGO_CONNECTION_STRING`, `MONGO_CONNECTION_URI`
-
-### Redis Settings
-
-- `REDIS_HOST` (str): Redis host. Default: `localhost`
-- `REDIS_PORT` (int): Redis port. Default: `6379`
-- `REDIS_PASSWORD` (str): Redis password. Default: `None`
-- `REDIS_READ_ONLY_HOST` (str): Redis read-only host. Default: `None`
-- `REDIS_READ_ONLY_PORT` (int): Redis read-only port. Default: `0`
-- `REDIS_READ_ONLY_PASSWORD` (str): Redis read-only password. Default: `None`
-
-### Runtime Settings
-
-- `SLEEP_MIN` (float): Minimum sleep time between runs in seconds. Default: `3`
-- `SLEEP_MAX` (float): Maximum sleep time between runs in seconds. Default: `5`
-- `EXIT_ON_FINISH` (bool): Call `exit(0)` when session is done. Default: `True`
-- `EXIT_DELAY` (float): Delay before exit in seconds. Default: `3`
-
-### Framework Initialization
-
-- `CARABAO_AUTO_INITIALIZE` (bool): Auto-initialize framework. Default: `True`
-- `CARABAO_AUTO_START` (bool): Auto-start framework on program termination. Default: `True`
-- `CARABAO_START_WITH_ERROR` (bool): Allow auto-start with errors. Default: `False`
-
-## Dependencies
-
-Carabao requires the following Python packages:
+## Requirements
 
 - async-timeout
 - dnspython
 - fun-things
-- generic-consumer
+- generic-lane
 - lazy-main
 - python-dotenv
 - simple-chalk
 - typing-extensions
 
-## License
+## Usage
 
-See the [LICENSE](LICENSE) file for details.
+### Basic Usage
+
+```python
+if __name__ == "__main__":
+    import carabao
+```
+
+### Environment Variables
+
+Carabao uses the following environment variables:
+
+- `QUEUE_NAME`: (Required) Name of the queue to consume
+- `CARABAO_AUTO_INITIALIZE`: Controls automatic initialization
+- `CARABAO_AUTO_START`: Controls automatic starting
+- `CARABAO_START_WITH_ERROR`: Whether to start even if errors occurred
+- `SINGLE_RUN`: Run once then exit if `True`
+- `TESTING`: Enable debug logging if `True`
+
+### CLI Usage
+
+Carabao provides a command-line interface for managing lanes:
+
+```sh
+carabao [command] [options]
+```
+
+#### Available Commands
+
+- `run [queue_name]`: Start a lane for the specified queue
+  - If no queue name is provided, displays an interactive curses-based menu to select from available lanes
+  - Example: `carabao run MY_QUEUE`
+
+The interactive menu displays:
+
+- A list of available lane queues
+- Highlights the last run queue
+- Provides navigation with arrow keys
+- Allows selection with Enter key
+- Exit option at the bottom
+
+The CLI automatically reads and updates the configuration file to track the last run queue and available lanes.
+
+## Built-in lanes
+
+Carabao comes with several built-in lanes that provide common functionality:
+
+### LogToDB
+
+A passive lane that logs exceptions to a MongoDB database.
+
+```python
+from carabao.lanes import LogToDB
+from pymongo import MongoClient
+
+# Configure MongoDB connection
+client = MongoClient("mongodb://localhost:27017/")
+db = client["my_database"]
+collection = db["error_logs"]
+
+# Configure LogToDB lane
+LogToDB.storage = collection
+LogToDB.name = "my_app"  # Optional, defaults to POD_NAME
+LogToDB.expiration_time = timedelta(days=7)  # Optional, defaults to 1 hour
+LogToDB.use_stacktrace = True  # Optional, defaults to True
+```
+
+Key features:
+
+- Automatically captures and logs exceptions to MongoDB
+- Configurable document expiration time
+- Options to use stack traces or simple error messages
+- Customizable document format
+
+### NetworkHealth
+
+Monitors network health by measuring ping times and stores the metrics in MongoDB.
+
+```python
+from carabao.lanes import NetworkHealth
+from pymongo import MongoClient
+
+# Configure MongoDB connection
+client = MongoClient("mongodb://localhost:27017/")
+db = client["my_database"]
+collection = db["network_health"]
+
+# Configure NetworkHealth lane
+NetworkHealth.storage = collection
+NetworkHealth.name = "api_service"  # Optional identifier
+```
+
+Key features:
+
+- Tracks network ping times
+- Stores metrics in a MongoDB collection
+- Updates records with timestamps for monitoring
+
+### PrettyEnv
+
+Displays environment variables in a formatted way to aid in debugging and configuration.
+
+```python
+# Automatically called. No configuration needed for PrettyEnv.
+```
+
+Key features:
+
+- Displays all accessed environment variables
+- Formatted for easy reading
+- Useful for debugging configuration issues
+
+## Development
