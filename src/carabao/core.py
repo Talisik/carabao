@@ -44,6 +44,12 @@ class Core:
         settings = Settings.get()
         cls.__started = True
 
+        _ = [
+            lane
+            for lane_directory in settings.lane_directories
+            for lane in Lane.load(lane_directory)
+        ]
+
         if QUEUE_NAME == None:
             raise Exception("'QUEUE_NAME' is not in the environment!")
 

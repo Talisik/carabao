@@ -5,9 +5,6 @@ from . import run
 
 
 def cli():
-    Core.startup = "DISABLED"  # Disable startup.
-    Core.config = "DISABLED"  # Disable config.
-
     parser = argparse.ArgumentParser(
         description="Carabao.",
     )

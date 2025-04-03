@@ -1,6 +1,7 @@
+from importlib import import_module
 from typing import Any, Iterable, final
 
-from fun_things import lazy, load_modules
+from fun_things import lazy
 
 from .cfg.cfg import CFG
 from .constants import (
@@ -14,7 +15,9 @@ from .constants import (
 
 
 class Settings:
-    lane_directories: Iterable[str]
+    lane_directories: Iterable[str] = [
+        "lanes",
+    ]
     """
     A collection of directory paths where lane modules are located.
     These directories will be scanned for lane definitions.
@@ -86,12 +89,13 @@ class Settings:
         Returns:
             Type[Settings]: The user-defined Settings class or the base Settings class.
         """
-        settings = [
-            *load_modules(
-                CFG().settings,
-                recursive=False,
-            )
-        ][0]
+        settings_module = CFG().settings
+        try:
+            # Try direct import
+            settings = import_module(settings_module)
+        except ModuleNotFoundError:
+            # If the module can't be found, return the base class
+            return Settings
 
         # Find the class that inherits from Settings
         for attr_name in dir(settings):
