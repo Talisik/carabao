@@ -1,4 +1,5 @@
 import os
+import sys
 
 from l2l import Lane
 from typer import Typer
@@ -14,6 +15,8 @@ app = Typer()
 def run(
     queue_name: str = "",
 ):
+    sys.path.insert(0, os.getcwd())
+
     if queue_name.strip() != "":
         os.environ["QUEUE_NAME"] = queue_name
 

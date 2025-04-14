@@ -1,5 +1,7 @@
 import curses
 
+from l2l import Lane
+
 from ..cfg.secret_cfg import SecretCFG
 from ..curses import CursesButton, CursesList, CursesText
 
@@ -52,7 +54,7 @@ class Display(CursesList):
 
         cfg = SecretCFG()
 
-        queue_names = [*cfg.primary_lanes]
+        queue_names = [lane.first_name() for lane in Lane.available_lanes()]
 
         if not any(queue_names):
             raise Exception("No lanes found!")
