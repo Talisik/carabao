@@ -1,23 +1,40 @@
-import argparse
+import os
+
+from l2l import Lane
+from typer import Typer
 
 from ..core import Core
-from . import run
+from ..settings import Settings
+from .display import Display
+
+app = Typer()
 
 
-def cli():
-    parser = argparse.ArgumentParser(
-        description="Carabao.",
-    )
-    subparsers = parser.add_subparsers(
-        dest="cli",
-    )
+@app.command()
+def run(
+    queue_name: str = "",
+):
+    if queue_name.strip() != "":
+        os.environ["QUEUE_NAME"] = queue_name
 
-    run.do(subparsers)
-
-    args = parser.parse_args()
-
-    if hasattr(args, "func"):
-        args.func(args)
+        Core.start()
         return
 
-    parser.print_help()
+    _ = [
+        lane
+        for lane_directory in Settings.get().lane_directories
+        for lane in Lane.load(lane_directory)
+    ]
+
+    # Draw the display.
+
+    queue_name = Display().run()
+
+    if not queue_name:
+        return
+
+    # Run the program again.
+
+    os.environ["QUEUE_NAME"] = queue_name
+
+    Core.start()

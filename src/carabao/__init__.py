@@ -30,3 +30,7 @@ try:
 
 except:
     pass
+
+
+def start():
+    Core.start()

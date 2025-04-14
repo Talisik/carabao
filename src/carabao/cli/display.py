@@ -1,13 +1,7 @@
 import curses
-import os
-from argparse import _SubParsersAction
-
-from l2l import Lane
 
 from ..cfg.secret_cfg import SecretCFG
-from ..core import Core
 from ..curses import CursesButton, CursesList, CursesText
-from ..settings import Settings
 
 
 class Display(CursesList):
@@ -83,46 +77,3 @@ class Display(CursesList):
                 callback=self.exit,
             )
         )
-
-
-def _main(args):
-    queue_name: str = args.queue_name
-
-    if queue_name.strip() != "":
-        os.environ["QUEUE_NAME"] = queue_name
-
-        Core.start()
-        return
-
-    _ = [
-        lane
-        for lane_directory in Settings.get().lane_directories
-        for lane in Lane.load(lane_directory)
-    ]
-
-    # Draw the display.
-
-    queue_name = Display().run()
-
-    if not queue_name:
-        return
-
-    # Run the program again.
-
-    os.environ["QUEUE_NAME"] = queue_name
-
-    Core.start()
-
-
-def do(subparsers: _SubParsersAction):
-    parser = subparsers.add_parser(
-        "run",
-        help="Starts the framework.",
-    )
-    parser.add_argument(
-        "queue_name",
-        type=str,
-        default="",
-        nargs="?",
-    )
-    parser.set_defaults(func=_main)

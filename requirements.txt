@@ -8,4 +8,5 @@ typing-extensions
 pymongo
 redis
 elasticsearch
+typer
 lane2lane @ git+https://github.com/Talisik/lane2lane.git

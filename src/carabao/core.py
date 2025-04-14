@@ -10,6 +10,8 @@ from .settings import Settings
 
 @final
 class Core:
+    __started = False
+
     def __init__(self):
         raise Exception("This is not instantiable!")
 
