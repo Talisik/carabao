@@ -22,6 +22,10 @@ class PrettyEnv(Lane):
     def priority_number(cls):
         return 200
 
+    @classmethod
+    def condition(cls, name: str):
+        return True
+
     def process(self, value):
         pretty_print(
             keys=mentioned_keys.keys(),

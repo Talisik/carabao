@@ -54,7 +54,11 @@ class Display(CursesList):
 
         cfg = SecretCFG()
 
-        queue_names = [lane.first_name() for lane in Lane.available_lanes()]
+        queue_names = [
+            lane.first_name()
+            for lane in Lane.available_lanes()
+            if lane.primary() and not lane.hidden()
+        ]
 
         if not any(queue_names):
             raise Exception("No lanes found!")
