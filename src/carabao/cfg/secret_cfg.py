@@ -1,4 +1,4 @@
-from ..constants import QUEUE_NAME
+from ..constants import C
 from .base_cfg import BaseCFG
 
 
@@ -17,4 +17,4 @@ class SecretCFG(BaseCFG):
     def write_last_run(self):
         section = self.get_section(self.LAST_RUN)
 
-        section[self.QUEUE_NAME] = QUEUE_NAME
+        section[self.QUEUE_NAME] = C.QUEUE_NAME

@@ -1,7 +1,7 @@
 import os
-from typing import Literal
 
 from dotenv import load_dotenv
+from fun_things import lazy
 from fun_things.environment import env
 
 load_dotenv()
@@ -17,109 +17,165 @@ def __environment(value):
     raise ValueError(f"Invalid environment '{value}'!")
 
 
-# ROOT_FOLDER_NAME = pathlib.Path(os.getcwd()).name
-# """
-# The name of the current working directory.
-# """
+@lazy
+class Constants:
+    @property
+    @lazy.fn
+    def FRAMEWORK_NAME(self):
+        return "CARABAO"
 
-FRAMEWORK_NAME = "CARABAO"
-FRAMEWORK_DEPLOY_SAFELY = env(
-    f"{FRAMEWORK_NAME}_DEPLOY_SAFELY",
-    cast=bool,
-    default=True,
-)
-"""
-If `True`,
-things that might be bad in a proper deployment will be adjusted,
-such as testing-related stuff.
-"""
-
-POD_NAME = env(
-    "POD_NAME",
-    cast=str,
-    default="",
-)
-
-try:
-    POD_INDEX = int(POD_NAME.split("-")[-1])
-except:
-    POD_INDEX = 0
-
-IN_KUBERNETES = any(
-    map(
-        # Prevent testing mode in Kubernetes.
-        lambda key: "kubernetes" in key.lower(),
-        os.environ.keys(),
-    )
-)
-"""
-If this process is running inside Kubernetes.
-"""
-ENVIRONMENT = env(
-    "ENVIRONMENT",
-    cast=__environment,
-    default="staging",
-)
-"""
-Values: `staging`, `production`
-"""
-IS_PRODUCTION = ENVIRONMENT == "production"
-IS_STAGING = ENVIRONMENT == "staging"
-TESTING = (
-    False
-    if FRAMEWORK_DEPLOY_SAFELY and IN_KUBERNETES
-    else (
-        env(
-            "TESTING",
+    @property
+    @lazy.fn
+    def FRAMEWORK_DEPLOY_SAFELY(self):
+        """
+        If `True`,
+        things that might be bad in a proper deployment will be adjusted,
+        such as testing-related stuff.
+        """
+        return env(
+            f"{self.FRAMEWORK_NAME}_DEPLOY_SAFELY",
             cast=bool,
-            default=False,
+            default=True,
         )
-    )
-)
-"""
-For testing purposes.
 
-Always `False` inside Kubernetes.
-"""
-SINGLE_RUN = env(
-    "SINGLE_RUN",
-    cast=bool,
-    default=True,
-)
+    @property
+    @lazy.fn
+    def POD_NAME(self):
+        return env(
+            "POD_NAME",
+            cast=str,
+            default="",
+        )
 
-QUEUE_NAME = env(
-    "QUEUE_NAME",
-    cast=str,
-    default=None,
-)
-BATCH_SIZE = env(
-    "BATCH_SIZE",
-    cast=int,
-    default=1,
-)
+    @property
+    @lazy.fn
+    def POD_INDEX(self):
+        try:
+            return int(self.POD_NAME.split("-")[-1])
+        except:
+            return 0
 
-SLEEP_MIN = env(
-    "SLEEP_MIN",
-    cast=float,
-    default=3,
-)
-SLEEP_MAX = env(
-    "SLEEP_MAX",
-    cast=float,
-    default=5,
-)
+    @property
+    @lazy.fn
+    def IN_KUBERNETES(self):
+        """
+        If this process is running inside Kubernetes.
+        """
+        return any(
+            map(
+                # Prevent testing mode in Kubernetes.
+                lambda key: "kubernetes" in key.lower(),
+                os.environ.keys(),
+            )
+        )
 
-EXIT_ON_FINISH = env(
-    "EXIT_ON_FINISH",
-    cast=bool,
-    default=True,
-)
-EXIT_DELAY = env(
-    "EXIT_DELAY",
-    cast=float,
-    default=3,
-)
+    @property
+    @lazy.fn
+    def ENVIRONMENT(self):
+        """
+        Values: `staging`, `production`
+        """
+        return env(
+            "ENVIRONMENT",
+            cast=__environment,
+            default="staging",
+        )
 
+    @property
+    @lazy.fn
+    def IS_PRODUCTION(self):
+        return self.ENVIRONMENT == "production"
+
+    @property
+    @lazy.fn
+    def IS_STAGING(self):
+        return self.ENVIRONMENT == "staging"
+
+    @property
+    @lazy.fn
+    def TESTING(self):
+        """
+        For testing purposes.
+
+        Always `False` inside Kubernetes.
+        """
+        return (
+            False
+            if C.FRAMEWORK_DEPLOY_SAFELY and self.IN_KUBERNETES
+            else (
+                env(
+                    "TESTING",
+                    cast=bool,
+                    default=False,
+                )
+            )
+        )
+
+    @property
+    @lazy.fn
+    def SINGLE_RUN(self):
+        return env(
+            "SINGLE_RUN",
+            cast=bool,
+            default=True,
+        )
+
+    @property
+    @lazy.fn
+    def QUEUE_NAME(self):
+        return env(
+            "QUEUE_NAME",
+            cast=str,
+            default=None,
+        )
+
+    @property
+    @lazy.fn
+    def BATCH_SIZE(self):
+        return env(
+            "BATCH_SIZE",
+            cast=int,
+            default=1,
+        )
+
+    @property
+    @lazy.fn
+    def SLEEP_MIN(self):
+        return env(
+            "SLEEP_MIN",
+            cast=float,
+            default=3,
+        )
+
+    @property
+    @lazy.fn
+    def SLEEP_MAX(self):
+        return env(
+            "SLEEP_MAX",
+            cast=float,
+            default=5,
+        )
+
+    @property
+    @lazy.fn
+    def EXIT_ON_FINISH(self):
+        return env(
+            "EXIT_ON_FINISH",
+            cast=bool,
+            default=True,
+        )
+
+    @property
+    @lazy.fn
+    def EXIT_DELAY(self):
+        return env(
+            "EXIT_DELAY",
+            cast=float,
+            default=3,
+        )
+
+
+C = Constants()
 
 try:
     from fun_things.singleton_hub.mongo_hub import MongoHub

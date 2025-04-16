@@ -1,11 +1,11 @@
 import dataclasses
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List
 
 from l2l import Lane
 
-from ..constants import POD_NAME
+from ..constants import C
 
 
 class LogToDB(Lane):
@@ -17,7 +17,7 @@ class LogToDB(Lane):
         date_created: datetime
         date_expiration: datetime
 
-    label: str = POD_NAME
+    label: str = C.POD_NAME
     """
     The name identifier for the logs.
     """

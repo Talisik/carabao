@@ -4,7 +4,6 @@ import sys
 from l2l import Lane
 from typer import Typer
 
-from .. import constants
 from ..core import Core
 from ..settings import Settings
 from .display import Display
@@ -20,7 +19,6 @@ def run(
 
     if queue_name.strip() != "":
         os.environ["QUEUE_NAME"] = queue_name
-        constants.QUEUE_NAME = queue_name
 
         Core.start()
         return
@@ -41,7 +39,6 @@ def run(
     # Run the program again.
 
     os.environ["QUEUE_NAME"] = queue_name
-    constants.QUEUE_NAME = queue_name
 
     Core.start()
 

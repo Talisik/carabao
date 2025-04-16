@@ -4,14 +4,7 @@ from typing import Any, Iterable, final
 from fun_things import lazy
 
 from .cfg.cfg import CFG
-from .constants import (
-    EXIT_DELAY,
-    EXIT_ON_FINISH,
-    FRAMEWORK_DEPLOY_SAFELY,
-    SINGLE_RUN,
-    SLEEP_MAX,
-    SLEEP_MIN,
-)
+from .constants import C
 
 
 class Settings:
@@ -23,37 +16,37 @@ class Settings:
     These directories will be scanned for lane definitions.
     """
 
-    deploy_safely = FRAMEWORK_DEPLOY_SAFELY
+    deploy_safely = C.FRAMEWORK_DEPLOY_SAFELY
     """
     If True, adjusts settings that might be problematic in production environments,
     such as disabling testing-related features.
     """
 
-    run_once = SINGLE_RUN
+    run_once = C.SINGLE_RUN
     """
     If True, the framework will execute each lane only once and then exit.
     Otherwise, lanes will continue to run according to their schedules.
     """
 
-    sleep_min = SLEEP_MIN
+    sleep_min = C.SLEEP_MIN
     """
     Minimum sleep time (in seconds) between lane executions when no work is available.
     This helps prevent excessive CPU usage during idle periods.
     """
 
-    sleep_max = SLEEP_MAX
+    sleep_max = C.SLEEP_MAX
     """
     Maximum sleep time (in seconds) between lane executions when no work is available.
     The framework will not sleep longer than this duration between checks.
     """
 
-    exit_on_finish = EXIT_ON_FINISH
+    exit_on_finish = C.EXIT_ON_FINISH
     """
     If True, the framework will exit after all lanes have completed execution.
     This is typically used in conjunction with run_once=True.
     """
 
-    exit_delay = EXIT_DELAY
+    exit_delay = C.EXIT_DELAY
     """
     Time delay (in seconds) before exiting when exit_on_finish is True.
     Provides a grace period for any final operations to complete.

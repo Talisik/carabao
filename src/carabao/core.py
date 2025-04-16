@@ -4,7 +4,7 @@ from typing import final
 from l2l import LOGGER, Lane
 from lazy_main import LazyMain
 
-from .constants import QUEUE_NAME, TESTING
+from .constants import C
 from .settings import Settings
 
 
@@ -41,7 +41,7 @@ class Core:
 
     @classmethod
     def __start(cls):
-        LOGGER().setLevel(logging.DEBUG if TESTING else logging.INFO)
+        LOGGER().setLevel(logging.DEBUG if C.TESTING else logging.INFO)
 
         settings = Settings.get()
         cls.__started = True
@@ -52,7 +52,7 @@ class Core:
             for lane in Lane.load(lane_directory)
         ]
 
-        if QUEUE_NAME == None:
+        if C.QUEUE_NAME == None:
             raise Exception("'QUEUE_NAME' is not in the environment!")
 
         main = LazyMain(
@@ -68,7 +68,7 @@ class Core:
 
         for loop in main:
             loop(
-                QUEUE_NAME,
+                C.QUEUE_NAME,
                 print_lanes=print_lanes,
             )
 
