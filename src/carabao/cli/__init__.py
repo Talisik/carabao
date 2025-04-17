@@ -52,11 +52,49 @@ def run(
 
 @app.command()
 def init():
-    os.mkdir("lanes")
+    if not os.path.exists("lanes"):
+        os.mkdir("lanes")
+
+    root_path = os.path.dirname(__file__)
 
     with open("lanes/lane.py", "wb") as f:
-        with open("./example_starter.py", "rb") as f2:
+        with open(
+            os.path.join(
+                root_path,
+                "sample_starter.py",
+            ),
+            "rb",
+        ) as f2:
             f.write(f2.read())
+
+        with open(
+            os.path.join(
+                root_path,
+                "sample_settings.py",
+            ),
+            "wb",
+        ) as f2:
+            f2.write(f2.read())
+
+    with open("settings.py", "wb") as f:
+        with open(
+            os.path.join(
+                root_path,
+                "sample_settings.py",
+            ),
+            "wb",
+        ) as f2:
+            f2.write(f2.read())
+
+    with open("carabao.cfg", "wb") as f:
+        with open(
+            os.path.join(
+                root_path,
+                "sample.cfg",
+            ),
+            "wb",
+        ) as f2:
+            f2.write(f2.read())
 
 
 @app.command()
@@ -86,7 +124,13 @@ def new(name: str):
             continue
 
         with open("lane_filepath", "w") as f:
-            with open("./example_lane.py", "r") as f2:
+            with open(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "sample_lane.py",
+                ),
+                "r",
+            ) as f2:
                 f.write(
                     f2.read().replace(
                         "LANE_NAME",
