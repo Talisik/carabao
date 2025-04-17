@@ -77,15 +77,13 @@ def init():
         ) as f2:
             f.write(f2.read())
 
-    with open("carabao.cfg", "wb") as f:
-        with open(
-            os.path.join(
-                root_path,
-                "sample.cfg",
-            ),
-            "rb",
-        ) as f2:
-            f.write(f2.read())
+    with open("carabao.cfg", "w") as f:
+        f.write(
+            """[directories]
+settings = settings
+lanes = lanes
+"""
+        )
 
 
 @app.command()
