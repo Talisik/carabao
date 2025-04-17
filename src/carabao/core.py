@@ -52,7 +52,7 @@ class Core:
             for lane in Lane.load(lane_directory)
         ]
 
-        if C.QUEUE_NAME == None:
+        if C.QUEUE_NAME is None:
             raise Exception("'QUEUE_NAME' is not in the environment!")
 
         main = LazyMain(
@@ -79,7 +79,7 @@ class Core:
 
             mongo.clear_all()
 
-        except:
+        except Exception:
             pass
 
         try:
@@ -87,7 +87,7 @@ class Core:
 
             redis.clear_all()
 
-        except:
+        except Exception:
             pass
 
         try:
@@ -95,5 +95,5 @@ class Core:
 
             es.clear_all()
 
-        except:
+        except Exception:
             pass

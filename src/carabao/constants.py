@@ -52,7 +52,7 @@ class Constants:
     def POD_INDEX(self):
         try:
             return int(self.POD_NAME.split("-")[-1])
-        except:
+        except Exception:
             return 0
 
     @property
@@ -183,7 +183,7 @@ try:
     class mongo(MongoHub):
         pass
 
-except:
+except Exception:
     pass
 
 
@@ -210,7 +210,7 @@ try:
             health_check_interval=60,
         )
 
-except:
+except Exception:
     pass
 
 
@@ -228,5 +228,5 @@ try:
             connections_per_node=25,
         )
 
-except:
+except Exception:
     pass

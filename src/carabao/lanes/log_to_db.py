@@ -48,6 +48,10 @@ class LogToDB(Lane):
     """
 
     @classmethod
+    def hidden(cls) -> bool:
+        return True
+
+    @classmethod
     def primary(cls) -> bool:
         return True
 
@@ -57,7 +61,7 @@ class LogToDB(Lane):
 
     @classmethod
     def condition(cls, name: str):
-        return cls.storage != None
+        return cls.storage is not None
 
     def __process_mongo(
         self,
@@ -105,7 +109,7 @@ class LogToDB(Lane):
         if isinstance(storage, Callable):
             storage = storage()
 
-        if storage == None:
+        if storage is None:
             return
 
         now = datetime.now(timezone.utc)

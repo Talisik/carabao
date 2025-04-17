@@ -15,6 +15,10 @@ class PrettyEnv(Lane):
     """
 
     @classmethod
+    def hidden(cls) -> bool:
+        return True
+
+    @classmethod
     def primary(cls) -> bool:
         return True
 

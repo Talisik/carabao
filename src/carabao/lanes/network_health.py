@@ -14,7 +14,7 @@ class NetworkHealth(Lane):
 
     @classmethod
     def hidden(cls):
-        return False
+        return True
 
     @classmethod
     def priority_number(cls):
@@ -22,7 +22,7 @@ class NetworkHealth(Lane):
 
     @classmethod
     def condition(cls, name: str):
-        return cls.storage != None
+        return cls.storage is not None
 
     def __process_mongo(
         self,
@@ -40,7 +40,7 @@ class NetworkHealth(Lane):
                     update={
                         "$set": {
                             "label": self.__class__.name,
-                            "ping_s": ping_s if ping_s != None else -1,
+                            "ping_s": ping_s if ping_s is not None else -1,
                             "date_created": datetime.now(timezone.utc),
                         },
                         "$setOnInsert": {
@@ -60,7 +60,7 @@ class NetworkHealth(Lane):
         return True
 
     def process(self, value):
-        if self.__class__.storage == None:
+        if self.__class__.storage is None:
             return
 
         self.__class__.catcher.open()
