@@ -67,24 +67,15 @@ def init():
         ) as f2:
             f.write(f2.read())
 
-        with open(
-            os.path.join(
-                root_path,
-                "sample_settings.py",
-            ),
-            "wb",
-        ) as f2:
-            f2.write(f2.read())
-
     with open("settings.py", "wb") as f:
         with open(
             os.path.join(
                 root_path,
                 "sample_settings.py",
             ),
-            "wb",
+            "rb",
         ) as f2:
-            f2.write(f2.read())
+            f.write(f2.read())
 
     with open("carabao.cfg", "wb") as f:
         with open(
@@ -92,9 +83,9 @@ def init():
                 root_path,
                 "sample.cfg",
             ),
-            "wb",
+            "rb",
         ) as f2:
-            f2.write(f2.read())
+            f.write(f2.read())
 
 
 @app.command()
