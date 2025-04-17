@@ -81,7 +81,6 @@ def init():
         f.write(
             """[directories]
 settings = settings
-lanes = lanes
 """
         )
 
