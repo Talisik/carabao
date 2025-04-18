@@ -83,6 +83,7 @@ class Settings:
             Type[Settings]: The user-defined Settings class or the base Settings class.
         """
         settings_module = CFG().settings
+
         try:
             # Try direct import
             settings = import_module(settings_module)

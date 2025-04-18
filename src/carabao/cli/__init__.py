@@ -3,6 +3,7 @@ import re
 import sys
 from typing import Annotated
 
+import typer
 from l2l import Lane
 from typer import Argument, Typer
 
@@ -52,12 +53,38 @@ def run(
 
 @app.command()
 def init():
-    if not os.path.exists("lanes"):
-        os.mkdir("lanes")
+    if os.path.exists("carabao.cfg"):
+        if not typer.confirm(
+            typer.style(
+                "This directory is already initialized. Moooove forward anyway?",
+                fg=typer.colors.YELLOW,
+            ),
+        ):
+            return
+
+    use_src = typer.confirm(
+        typer.style(
+            "Use /src?",
+            fg=typer.colors.BRIGHT_BLUE,
+        ),
+        default=False,
+    )
+
+    lane_directory: str = "src/lanes" if use_src else "lanes"
+    lane_directory = typer.prompt(
+        typer.style(
+            "Lane Directory",
+            fg=typer.colors.BRIGHT_BLUE,
+        ),
+        default=lane_directory,
+    )
+
+    if not os.path.exists(lane_directory):
+        os.makedirs(lane_directory)
 
     root_path = os.path.dirname(__file__)
 
-    with open("lanes/lane.py", "wb") as f:
+    with open(f"{lane_directory}/starter_lane.py", "wb") as f:
         with open(
             os.path.join(
                 root_path,
@@ -67,22 +94,34 @@ def init():
         ) as f2:
             f.write(f2.read())
 
-    with open("settings.py", "wb") as f:
+    with open(f"{'src/' if use_src else ''}settings.py", "w") as f:
         with open(
             os.path.join(
                 root_path,
                 "sample_settings.py",
             ),
-            "rb",
+            "r",
         ) as f2:
-            f.write(f2.read())
+            f.write(
+                f2.read().replace(
+                    "LANE_DIRECTORY",
+                    lane_directory.replace("/", "."),
+                )
+            )
 
     with open("carabao.cfg", "w") as f:
         f.write(
-            """[directories]
-settings = settings
+            f"""[directories]
+settings = {"src." if use_src else ""}settings
 """
         )
+
+    typer.echo(
+        typer.style(
+            "Carabao initialized.",
+            fg=typer.colors.GREEN,
+        )
+    )
 
 
 @app.command()
@@ -111,7 +150,7 @@ def new(name: str):
         if os.path.exists(lane_filepath):
             continue
 
-        with open("lane_filepath", "w") as f:
+        with open(lane_filepath, "w") as f:
             with open(
                 os.path.join(
                     os.path.dirname(__file__),
