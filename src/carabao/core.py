@@ -1,5 +1,5 @@
 import logging
-from typing import final
+from typing import Type, Union, final
 
 from l2l import LOGGER, Lane
 from lazy_main import LazyMain
@@ -40,17 +40,24 @@ class Core:
         cls.__start()
 
     @classmethod
+    def load_lanes(
+        cls,
+        settings: Union[Settings, Type[Settings]],
+    ):
+        _ = [
+            lane
+            for lane_directory in settings.lane_directories
+            for lane in Lane.load(lane_directory)
+        ]
+
+    @classmethod
     def __start(cls):
         LOGGER().setLevel(logging.DEBUG if C.TESTING else logging.INFO)
 
         settings = Settings.get()
         cls.__started = True
 
-        _ = [
-            lane
-            for lane_directory in settings.lane_directories
-            for lane in Lane.load(lane_directory)
-        ]
+        cls.load_lanes(settings)
 
         if C.QUEUE_NAME is None:
             raise Exception("'QUEUE_NAME' is not in the environment!")

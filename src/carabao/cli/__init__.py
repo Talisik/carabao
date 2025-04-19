@@ -4,56 +4,72 @@ import sys
 from typing import Annotated
 
 import typer
-from l2l import Lane
-from typer import Argument, Typer
 
 from ..core import Core
 from ..settings import Settings
 from .display import Display
 
-app = Typer()
+app = typer.Typer()
 
 
-@app.command()
-def run(
-    queue_name: Annotated[
+@app.command(
+    help="Run the pipeline in development mode.",
+)
+def dev(
+    name: Annotated[
         str,
-        Argument(
+        typer.Argument(
+            help="The name of the lane to run.",
             is_eager=False,
         ),
     ] = "",
 ):
     sys.path.insert(0, os.getcwd())
 
-    if queue_name.strip() != "":
-        os.environ["QUEUE_NAME"] = queue_name
+    if name.strip() != "":
+        os.environ["QUEUE_NAME"] = name
 
         Core.start()
         return
 
-    _ = [
-        lane
-        for lane_directory in Settings.get().lane_directories
-        for lane in Lane.load(lane_directory)
-    ]
+    Core.load_lanes(Settings.get())
 
     # Draw the display.
 
-    queue_name = Display().run()
+    name = Display().run()
 
-    if not queue_name:
+    if not name:
         return
 
     # Run the program again.
 
-    os.environ["QUEUE_NAME"] = queue_name
+    os.environ["QUEUE_NAME"] = name
 
     Core.start()
 
 
-@app.command()
-def init():
-    if os.path.exists("carabao.cfg"):
+@app.command(
+    help="Run the pipeline in production mode.",
+)
+def run():
+    sys.path.insert(0, os.getcwd())
+    Core.start()
+
+
+@app.command(
+    help="Initialize the project.",
+)
+def init(
+    skip: Annotated[
+        bool,
+        typer.Option(
+            "--skip",
+            "-s",
+            help="Skip all prompts.",
+        ),
+    ] = False,
+):
+    if not skip and os.path.exists("carabao.cfg"):
         if not typer.confirm(
             typer.style(
                 "This directory is already initialized. Moooove forward anyway?",
@@ -62,7 +78,7 @@ def init():
         ):
             return
 
-    use_src = typer.confirm(
+    use_src = not skip and typer.confirm(
         typer.style(
             "Use /src?",
             fg=typer.colors.BRIGHT_BLUE,
@@ -71,12 +87,16 @@ def init():
     )
 
     lane_directory: str = "src/lanes" if use_src else "lanes"
-    lane_directory = typer.prompt(
-        typer.style(
-            "Lane Directory",
-            fg=typer.colors.BRIGHT_BLUE,
-        ),
-        default=lane_directory,
+    lane_directory = (
+        lane_directory
+        if not skip
+        else typer.prompt(
+            typer.style(
+                "Lane Directory",
+                fg=typer.colors.BRIGHT_BLUE,
+            ),
+            default=lane_directory,
+        )
     )
 
     if not os.path.exists(lane_directory):

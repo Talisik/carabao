@@ -4,17 +4,23 @@ from dotenv import load_dotenv
 from fun_things import lazy
 from fun_things.environment import env
 
-load_dotenv()
+__environment = os.getenv(
+    "ENVIRONMENT",
+    "staging",
+)
+__env_file = f".env.{__environment}" if __environment else ".env"
 
+if os.path.exists(__env_file):
+    load_dotenv(__env_file)
+    print(
+        f"\033[43m\033[33m{__env_file}\033[0m\033[33m loaded.\033[0m",
+    )
 
-def __environment(value):
-    if value == "staging":
-        return "staging"
-
-    if value == "production":
-        return "production"
-
-    raise ValueError(f"Invalid environment '{value}'!")
+else:
+    load_dotenv()
+    print(
+        "\033[43m\033[33m.env\033[0m\033[33m loaded.\033[0m",
+    )
 
 
 @lazy
@@ -72,12 +78,9 @@ class Constants:
     @property
     @lazy.fn
     def ENVIRONMENT(self):
-        """
-        Values: `staging`, `production`
-        """
         return env(
             "ENVIRONMENT",
-            cast=__environment,
+            cast=str,
             default="staging",
         )
 
