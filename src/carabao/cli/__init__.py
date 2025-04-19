@@ -144,9 +144,18 @@ settings = {"src." if use_src else ""}settings
     )
 
 
-@app.command()
-def new(name: str):
-    lane_directories = [*Settings.get().lane_directories]
+@app.command(
+    help="Create a new lane.",
+)
+def new(
+    name: Annotated[
+        str,
+        typer.Argument(help="The name of the lane to create."),
+    ],
+):
+    lane_directories = [
+        *Settings.get().value_of("LANE_DIRECTORIES"),
+    ]
 
     if not lane_directories:
         raise Exception("Lane directory not found!")

@@ -1,45 +1,51 @@
 import os
+import re
 
 from dotenv import load_dotenv
 from fun_things import lazy
 from fun_things.environment import env
 
-__environment = os.getenv(
-    "ENVIRONMENT",
-    "staging",
-)
-__env_file = f".env.{__environment}" if __environment else ".env"
-
-if os.path.exists(__env_file):
-    load_dotenv(__env_file)
-    print(
-        f"\033[43m\033[33m{__env_file}\033[0m\033[33m loaded.\033[0m",
-    )
-
-else:
-    load_dotenv()
-    print(
-        "\033[43m\033[33m.env\033[0m\033[33m loaded.\033[0m",
-    )
-
 
 @lazy
 class Constants:
-    @property
-    @lazy.fn
-    def FRAMEWORK_NAME(self):
-        return "CARABAO"
+    __env = False
+
+    def __load_env(self):
+        __environment = os.getenv(
+            "ENVIRONMENT",
+            "staging",
+        )
+        __env_file = f".env.{__environment}" if __environment else ".env"
+
+        if os.path.exists(__env_file):
+            load_dotenv(__env_file)
+            print(
+                f"\033[43m\033[33m{__env_file}\033[0m\033[33m loaded.\033[0m",
+            )
+        else:
+            load_dotenv()
+            print(
+                "\033[43m\033[33m.env\033[0m\033[33m loaded.\033[0m",
+            )
+
+    def _ensure_env_loaded(self):
+        if not self.__env:
+            self.__load_env()
+
+            self.__env = True
 
     @property
     @lazy.fn
-    def FRAMEWORK_DEPLOY_SAFELY(self):
+    def DEPLOY_SAFELY(self):
         """
         If `True`,
         things that might be bad in a proper deployment will be adjusted,
         such as testing-related stuff.
         """
+        self._ensure_env_loaded()
+
         return env(
-            f"{self.FRAMEWORK_NAME}_DEPLOY_SAFELY",
+            "DEPLOY_SAFELY",
             cast=bool,
             default=True,
         )
@@ -47,6 +53,8 @@ class Constants:
     @property
     @lazy.fn
     def POD_NAME(self):
+        self._ensure_env_loaded()
+
         return env(
             "POD_NAME",
             cast=str,
@@ -56,6 +64,8 @@ class Constants:
     @property
     @lazy.fn
     def POD_INDEX(self):
+        self._ensure_env_loaded()
+
         try:
             return int(self.POD_NAME.split("-")[-1])
         except Exception:
@@ -67,6 +77,8 @@ class Constants:
         """
         If this process is running inside Kubernetes.
         """
+        self._ensure_env_loaded()
+
         return any(
             map(
                 # Prevent testing mode in Kubernetes.
@@ -78,6 +90,8 @@ class Constants:
     @property
     @lazy.fn
     def ENVIRONMENT(self):
+        self._ensure_env_loaded()
+
         return env(
             "ENVIRONMENT",
             cast=str,
@@ -86,12 +100,21 @@ class Constants:
 
     @property
     @lazy.fn
-    def IS_PRODUCTION(self):
+    def IN_DEVELOPMENT(self):
+        pass
+
+    @property
+    @lazy.fn
+    def ENV_IS_PRODUCTION(self):
+        self._ensure_env_loaded()
+
         return self.ENVIRONMENT == "production"
 
     @property
     @lazy.fn
-    def IS_STAGING(self):
+    def ENV_IS_STAGING(self):
+        self._ensure_env_loaded()
+
         return self.ENVIRONMENT == "staging"
 
     @property
@@ -102,9 +125,11 @@ class Constants:
 
         Always `False` inside Kubernetes.
         """
+        self._ensure_env_loaded()
+
         return (
             False
-            if C.FRAMEWORK_DEPLOY_SAFELY and self.IN_KUBERNETES
+            if C.DEPLOY_SAFELY and self.IN_KUBERNETES
             else (
                 env(
                     "TESTING",
@@ -117,6 +142,7 @@ class Constants:
     @property
     @lazy.fn
     def SINGLE_RUN(self):
+        self._ensure_env_loaded()
         return env(
             "SINGLE_RUN",
             cast=bool,
@@ -126,6 +152,7 @@ class Constants:
     @property
     @lazy.fn
     def QUEUE_NAME(self):
+        self._ensure_env_loaded()
         return env(
             "QUEUE_NAME",
             cast=str,
@@ -135,6 +162,7 @@ class Constants:
     @property
     @lazy.fn
     def BATCH_SIZE(self):
+        self._ensure_env_loaded()
         return env(
             "BATCH_SIZE",
             cast=int,
@@ -144,6 +172,7 @@ class Constants:
     @property
     @lazy.fn
     def SLEEP_MIN(self):
+        self._ensure_env_loaded()
         return env(
             "SLEEP_MIN",
             cast=float,
@@ -153,6 +182,7 @@ class Constants:
     @property
     @lazy.fn
     def SLEEP_MAX(self):
+        self._ensure_env_loaded()
         return env(
             "SLEEP_MAX",
             cast=float,
@@ -162,6 +192,7 @@ class Constants:
     @property
     @lazy.fn
     def EXIT_ON_FINISH(self):
+        self._ensure_env_loaded()
         return env(
             "EXIT_ON_FINISH",
             cast=bool,
@@ -171,10 +202,32 @@ class Constants:
     @property
     @lazy.fn
     def EXIT_DELAY(self):
+        self._ensure_env_loaded()
+
         return env(
             "EXIT_DELAY",
             cast=float,
             default=3,
+        )
+
+    @property
+    @lazy.fn
+    def LANE_DIRECTORIES(self):
+        """
+        A list of directories where lane modules are located.
+        """
+        self._ensure_env_loaded()
+
+        return env(
+            "LANE_DIRECTORIES",
+            cast=lambda value: [
+                item.strip()
+                for item in re.split(
+                    r"[^,\n]+",
+                    value,
+                )
+            ],
+            default=["lanes"],
         )
 
 
