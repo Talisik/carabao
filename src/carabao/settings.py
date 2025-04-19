@@ -1,5 +1,5 @@
 from importlib import import_module
-from typing import Any, Iterable, final
+from typing import Any, Iterable, Optional, final
 
 from fun_things import lazy
 
@@ -8,6 +8,11 @@ from .constants import C
 
 
 class Settings:
+    PROCESSES: Optional[int]
+    """
+    The number of processes to use for the framework.
+    """
+
     LANE_DIRECTORIES: Iterable[str]
     """
     A collection of directory paths where lane modules are located.

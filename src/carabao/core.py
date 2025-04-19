@@ -65,6 +65,7 @@ class Core:
             loop(
                 C.QUEUE_NAME,
                 print_lanes=print_lanes,
+                processes=settings.value_of("PROCESSES"),
             )
 
             print_lanes = False

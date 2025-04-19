@@ -36,6 +36,17 @@ class Constants:
 
     @property
     @lazy.fn
+    def PROCESSES(self):
+        self._ensure_env_loaded()
+
+        return env(
+            "PROCESSES",
+            cast=int,
+            default=None,
+        )
+
+    @property
+    @lazy.fn
     def DEPLOY_SAFELY(self):
         """
         If `True`,
