@@ -1,7 +1,7 @@
 import dataclasses
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, List
+from typing import Any, Callable, List, Optional
 
 from l2l import Lane
 
@@ -17,7 +17,7 @@ class LogToDB(Lane):
         date_created: datetime
         date_expiration: datetime
 
-    label: str = C.POD_NAME
+    label: Optional[str] = None
     """
     The name identifier for the logs.
     """
@@ -115,7 +115,7 @@ class LogToDB(Lane):
         now = datetime.now(timezone.utc)
         documents = [
             LogToDB.Document(
-                label=self.__class__.label,
+                label=self.__class__.label or C.POD_NAME,
                 type="error",
                 error=error,
                 date_created=now,
