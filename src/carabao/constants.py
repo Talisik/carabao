@@ -10,7 +10,13 @@ from fun_things.environment import env
 class Constants:
     __env = False
 
-    def __load_env(self):
+    @classmethod
+    def load_env(cls):
+        if cls.__env:
+            return
+
+        cls.__env = True
+
         __environment = os.getenv(
             "ENVIRONMENT",
             "staging",
@@ -28,16 +34,10 @@ class Constants:
                 "\033[43m\033[33m.env\033[0m\033[33m loaded.\033[0m",
             )
 
-    def _ensure_env_loaded(self):
-        if not self.__env:
-            self.__load_env()
-
-            self.__env = True
-
     @property
     @lazy.fn
     def PROCESSES(self):
-        self._ensure_env_loaded()
+        self.load_env()
 
         return env(
             "PROCESSES",
@@ -53,7 +53,7 @@ class Constants:
         things that might be bad in a proper deployment will be adjusted,
         such as testing-related stuff.
         """
-        self._ensure_env_loaded()
+        self.load_env()
 
         return env(
             "DEPLOY_SAFELY",
@@ -64,7 +64,7 @@ class Constants:
     @property
     @lazy.fn
     def POD_NAME(self):
-        self._ensure_env_loaded()
+        self.load_env()
 
         return env(
             "POD_NAME",
@@ -75,7 +75,7 @@ class Constants:
     @property
     @lazy.fn
     def POD_INDEX(self):
-        self._ensure_env_loaded()
+        self.load_env()
 
         try:
             return int(self.POD_NAME.split("-")[-1])
@@ -88,7 +88,7 @@ class Constants:
         """
         If this process is running inside Kubernetes.
         """
-        self._ensure_env_loaded()
+        self.load_env()
 
         return any(
             map(
@@ -101,7 +101,7 @@ class Constants:
     @property
     @lazy.fn
     def ENVIRONMENT(self):
-        self._ensure_env_loaded()
+        self.load_env()
 
         return env(
             "ENVIRONMENT",
@@ -117,14 +117,14 @@ class Constants:
     @property
     @lazy.fn
     def ENV_IS_PRODUCTION(self):
-        self._ensure_env_loaded()
+        self.load_env()
 
         return self.ENVIRONMENT == "production"
 
     @property
     @lazy.fn
     def ENV_IS_STAGING(self):
-        self._ensure_env_loaded()
+        self.load_env()
 
         return self.ENVIRONMENT == "staging"
 
@@ -136,7 +136,7 @@ class Constants:
 
         Always `False` inside Kubernetes.
         """
-        self._ensure_env_loaded()
+        self.load_env()
 
         return (
             False
@@ -153,7 +153,7 @@ class Constants:
     @property
     @lazy.fn
     def SINGLE_RUN(self):
-        self._ensure_env_loaded()
+        self.load_env()
         return env(
             "SINGLE_RUN",
             cast=bool,
@@ -163,7 +163,7 @@ class Constants:
     @property
     @lazy.fn
     def QUEUE_NAME(self):
-        self._ensure_env_loaded()
+        self.load_env()
         return env(
             "QUEUE_NAME",
             cast=str,
@@ -173,7 +173,7 @@ class Constants:
     @property
     @lazy.fn
     def BATCH_SIZE(self):
-        self._ensure_env_loaded()
+        self.load_env()
         return env(
             "BATCH_SIZE",
             cast=int,
@@ -183,7 +183,8 @@ class Constants:
     @property
     @lazy.fn
     def SLEEP_MIN(self):
-        self._ensure_env_loaded()
+        self.load_env()
+
         return env(
             "SLEEP_MIN",
             cast=float,
@@ -193,7 +194,8 @@ class Constants:
     @property
     @lazy.fn
     def SLEEP_MAX(self):
-        self._ensure_env_loaded()
+        self.load_env()
+
         return env(
             "SLEEP_MAX",
             cast=float,
@@ -203,7 +205,8 @@ class Constants:
     @property
     @lazy.fn
     def EXIT_ON_FINISH(self):
-        self._ensure_env_loaded()
+        self.load_env()
+
         return env(
             "EXIT_ON_FINISH",
             cast=bool,
@@ -213,7 +216,7 @@ class Constants:
     @property
     @lazy.fn
     def EXIT_DELAY(self):
-        self._ensure_env_loaded()
+        self.load_env()
 
         return env(
             "EXIT_DELAY",
@@ -227,7 +230,7 @@ class Constants:
         """
         A list of directories where lane modules are located.
         """
-        self._ensure_env_loaded()
+        self.load_env()
 
         return env(
             "LANE_DIRECTORIES",
@@ -243,6 +246,18 @@ class Constants:
 
 
 C = Constants()
+
+if os.getenv(
+    "CARABAO_ENV_AUTOLOAD",
+    "1",
+).lower() in (
+    "true",
+    "1",
+    "t",
+    "y",
+    "yes",
+):
+    C.load_env()
 
 try:
     from fun_things.singleton_hub.mongo_hub import MongoHub
