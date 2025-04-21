@@ -27,6 +27,10 @@ class PrettyEnv(Lane):
         return 200
 
     @classmethod
+    def max_run_count(cls) -> int:
+        return 1
+
+    @classmethod
     def condition(cls, name: str):
         return True
 
