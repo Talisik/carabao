@@ -4,6 +4,7 @@ import re
 from dotenv import load_dotenv
 from fun_things import lazy
 from fun_things.environment import env
+from psycopg2._psycopg import connection
 
 
 @lazy
@@ -324,6 +325,46 @@ try:
             retry_on_timeout=True,
             connections_per_node=25,
         )
+
+except Exception:
+    pass
+
+try:
+    import psycopg2
+    from fun_things.singleton_hub.environment_hub import EnvironmentHubMeta
+    from psycopg2._psycopg import connection
+
+    admin = psycopg2.connect()
+
+    class PGMeta(EnvironmentHubMeta[connection]):
+        _formats = EnvironmentHubMeta._bake_basic_uri_formats(
+            "PG",
+            "POSTGRESQL",
+            "POSTGRES",
+        )
+        _kwargs: dict = {}
+        _log: bool = True
+
+        def _value_selector(cls, name: str):
+            client = psycopg2.connect(
+                os.environ.get(name),
+                **cls._kwargs,
+            )
+
+            if cls._log:
+                print(f"PostgreSQL `{name}` instantiated.")
+
+            return client
+
+        def _on_clear(cls, key: str, value: connection) -> None:
+            value.close()
+
+            if cls._log:
+                print(f"PostgreSQL `{key}` closed.")
+
+    class pg(metaclass=PGMeta):
+        def __new__(cls, name: str = ""):
+            return cls.get(name)
 
 except Exception:
     pass

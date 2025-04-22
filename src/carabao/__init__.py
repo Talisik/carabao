@@ -21,6 +21,12 @@ try:
 except Exception:
     pass
 
+try:
+    from .constants import pg
+
+except Exception:
+    pass
+
 
 def start():
     Core.start()
@@ -37,4 +43,5 @@ __all__ = [
     "mongo",
     "redis",
     "es",
+    "pg",
 ]
