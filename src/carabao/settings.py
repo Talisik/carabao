@@ -56,6 +56,15 @@ class Settings:
     """
 
     @classmethod
+    def get_all_fields(cls):
+        yield from (
+            key
+            for sub_cls in cls.__mro__
+            if hasattr(sub_cls, "__annotations__")
+            for key in sub_cls.__annotations__.keys()
+        )
+
+    @classmethod
     def value_of(cls, key: str):
         if hasattr(cls, key):
             return getattr(cls, key)

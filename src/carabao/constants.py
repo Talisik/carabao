@@ -34,6 +34,21 @@ class Constants:
                 "\033[43m\033[33m.env\033[0m\033[33m loaded.\033[0m",
             )
 
+    def load_all_properties(self):
+        """
+        Loads all property functions to ensure that all environment variables
+        are initialized and loaded.
+        """
+        for name in dir(self):
+            attr = getattr(self, name)
+
+            if isinstance(attr, property):
+                # Access the property to trigger its loading
+                if not attr.fget:
+                    continue
+
+                _ = attr.fget(self)
+
     @property
     @lazy.fn
     def PROCESSES(self):

@@ -47,6 +47,8 @@ class Core:
 
         cls.load_lanes(settings)
 
+        C.load_all_properties()
+
         if C.QUEUE_NAME is None:
             raise Exception("'QUEUE_NAME' is not in the environment!")
 
