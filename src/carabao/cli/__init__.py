@@ -1,9 +1,9 @@
 import os
 import re
 import sys
-from typing import Annotated
 
 import typer
+from typing_extensions import Annotated
 
 from carabao.constants import C
 
