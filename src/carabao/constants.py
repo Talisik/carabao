@@ -14,7 +14,7 @@ class Constants:
 
     @classmethod
     def _dev_mode(cls, name: str):
-        if cls.__dev_mode is not None:
+        if cls.__dev_mode:
             return
 
         cls.__dev_mode = True
@@ -36,7 +36,7 @@ class Constants:
 
         cls.__env = True
 
-        filepath = ".env.development" if cls.__dev_mode is not None else ".env.release"
+        filepath = ".env.development" if cls.__dev_mode else ".env.release"
 
         if os.path.exists(filepath):
             load_dotenv(filepath)
