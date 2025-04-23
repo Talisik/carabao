@@ -113,7 +113,7 @@ def init(
     lane_directory: str = "src/lanes" if use_src else "lanes"
     lane_directory = (
         lane_directory
-        if not skip
+        if skip
         else typer.prompt(
             typer.style(
                 "Lane Directory",
@@ -159,6 +159,14 @@ def init(
 settings = {"src." if use_src else ""}settings
 """
         )
+
+    if not os.path.exists(".env.development"):
+        with open(".env.development", "wb") as f:
+            f.write(b"")
+
+    if not os.path.exists(".env.release"):
+        with open(".env.release", "wb") as f:
+            f.write(b"")
 
     typer.echo(
         typer.style(

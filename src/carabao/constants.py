@@ -15,37 +15,46 @@ class Constants:
 
     @classmethod
     def _dev_mode(cls, name: str):
+        if cls.__dev_mode is not None:
+            return
+
         cls.__dev_mode = name
 
     @classmethod
     def load_env(cls):
         """
-        Loads environment variables from .env file based on the current environment.
+        Loads environment variables from a file. The method first checks if the
+        environment variables have already been loaded. If not, it determines
+        the appropriate file to load based on the development mode. It attempts
+        to load from '.env.development' or '.env.release' first, and if neither
+        exists, it defaults to loading from '.env'.
 
-        This method loads the appropriate .env file based on the ENVIRONMENT variable
-        and sets up the environment for the application.
+        The method prints a message indicating which file was loaded.
         """
         if cls.__env:
             return
 
         cls.__env = True
 
-        __environment = os.getenv(
-            "ENVIRONMENT",
-            "staging",
-        )
-        __env_file = f".env.{__environment}" if __environment else ".env"
+        filepath = ".env.development" if cls.__dev_mode is not None else ".env.release"
 
-        if os.path.exists(__env_file):
-            load_dotenv(__env_file)
+        if os.path.exists(filepath):
+            load_dotenv(filepath)
             print(
-                f"\033[43m\033[33m{__env_file}\033[0m\033[33m loaded.\033[0m",
+                f"\033[43m\033[33m{filepath}\033[0m\033[33m loaded.\033[0m",
             )
-        else:
-            load_dotenv()
+            return
+
+        filepath = ".env"
+
+        if os.path.exists(filepath):
+            load_dotenv(filepath)
             print(
                 "\033[43m\033[33m.env\033[0m\033[33m loaded.\033[0m",
             )
+            return
+
+        load_dotenv()
 
     def load_all_properties(self):
         """
@@ -170,7 +179,7 @@ class Constants:
         Returns:
             bool: True if in development mode, False otherwise.
         """
-        return self.__dev_mode is not None
+        return self.__class__.__dev_mode is not None
 
     @property
     @lazy.fn
