@@ -1,6 +1,5 @@
 import os
 import re
-from typing import Optional
 
 from dotenv import load_dotenv
 from fun_things import lazy
@@ -11,14 +10,15 @@ from psycopg2._psycopg import connection
 @lazy
 class Constants:
     __env = False
-    __dev_mode: Optional[str] = None
+    __dev_mode = False
 
     @classmethod
     def _dev_mode(cls, name: str):
         if cls.__dev_mode is not None:
             return
 
-        cls.__dev_mode = name
+        cls.__dev_mode = True
+        cls.__dev_name = name
 
     @classmethod
     def load_env(cls):
@@ -179,7 +179,7 @@ class Constants:
         Returns:
             bool: True if in development mode, False otherwise.
         """
-        return self.__class__.__dev_mode is not None
+        return self.__class__.__dev_mode
 
     @property
     @lazy.fn
@@ -219,7 +219,7 @@ class Constants:
 
         return (
             False
-            if C.DEPLOY_SAFELY and self.IN_KUBERNETES
+            if self.DEPLOY_SAFELY and self.IN_KUBERNETES
             else (
                 env(
                     "TESTING",
@@ -254,8 +254,8 @@ class Constants:
         Returns:
             str or None: The queue name or None if not specified.
         """
-        if self.__dev_mode is not None:
-            return self.__dev_mode
+        if self.__dev_mode:
+            return self.__dev_name
 
         self.load_env()
 
@@ -372,18 +372,6 @@ class Constants:
 
 C = Constants()
 
-if os.getenv(
-    "CARABAO_ENV_AUTOLOAD",
-    "1",
-).lower() in (
-    "true",
-    "1",
-    "t",
-    "y",
-    "yes",
-):
-    C.load_env()
-
 try:
     from fun_things.singleton_hub.mongo_hub import MongoHub
 
@@ -442,8 +430,6 @@ try:
     import psycopg2
     from fun_things.singleton_hub.environment_hub import EnvironmentHubMeta
     from psycopg2._psycopg import connection
-
-    admin = psycopg2.connect()
 
     class PGMeta(EnvironmentHubMeta[connection]):
         _formats = EnvironmentHubMeta._bake_basic_uri_formats(
