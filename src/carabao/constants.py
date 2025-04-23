@@ -34,11 +34,17 @@ class Constants:
         cls.__env = True
 
         filepath = ".env.development" if cls.__dev_mode else ".env.release"
+        color_code = "43" if cls.__dev_mode else "42"
+        template = "Environment File: \033[{0}m{1}\033[0m\n"
 
         if os.path.exists(filepath):
             load_dotenv(filepath)
+
             print(
-                f"\033[43m\033[33m{filepath}\033[0m\033[33m loaded.\033[0m",
+                template.format(
+                    color_code,
+                    filepath,
+                ),
             )
             return
 
@@ -47,7 +53,10 @@ class Constants:
         if os.path.exists(filepath):
             load_dotenv(filepath)
             print(
-                "\033[43m\033[33m.env\033[0m\033[33m loaded.\033[0m",
+                template.format(
+                    color_code,
+                    filepath,
+                ),
             )
             return
 

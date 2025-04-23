@@ -35,6 +35,8 @@ def dev(
     Args:
         name: The name of the lane to run.
     """
+    print("\033[93m⚠️ Development Mode ⚠️\033[0m\n")
+
     sys.path.insert(0, os.getcwd())
 
     if name.strip() != "":
