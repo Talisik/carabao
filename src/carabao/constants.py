@@ -4,7 +4,6 @@ import re
 from dotenv import load_dotenv
 from fun_things import lazy
 from fun_things.environment import env
-from psycopg2._psycopg import connection
 
 
 @lazy
