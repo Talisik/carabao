@@ -5,11 +5,13 @@ from l2l import LOGGER, Lane
 from lazy_main import LazyMain
 
 from .constants import C
+from .errors import MissingEnvError
 from .settings import Settings
 
 
 @final
 class Core:
+    in_development: bool = False
     __started = False
 
     def __init__(self):
@@ -32,6 +34,12 @@ class Core:
         cls,
         settings: Union[Settings, Type[Settings]],
     ):
+        """
+        Loads all Lane classes from the specified directories.
+
+        Args:
+            settings: The settings object containing the LANE_DIRECTORIES configuration.
+        """
         _ = [
             lane
             for lane_directory in settings.value_of("LANE_DIRECTORIES")
@@ -50,7 +58,7 @@ class Core:
         C.load_all_properties()
 
         if C.QUEUE_NAME is None:
-            raise Exception("'QUEUE_NAME' is not in the environment!")
+            raise MissingEnvError("QUEUE_NAME")
 
         main = LazyMain(
             main=Lane.start,
@@ -92,6 +100,14 @@ class Core:
             from .constants import es
 
             es.clear_all()
+
+        except Exception:
+            pass
+
+        try:
+            from .constants import pg
+
+            pg.clear_all()
 
         except Exception:
             pass

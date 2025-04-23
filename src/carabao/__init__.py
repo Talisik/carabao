@@ -29,6 +29,11 @@ except Exception:
 
 
 def start():
+    """
+    Starts the Carabao framework.
+
+    This is the main entry point to initialize and run the application.
+    """
     Core.start()
 
 

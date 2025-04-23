@@ -14,14 +14,37 @@ class NetworkHealth(Lane):
 
     @classmethod
     def hidden(cls):
+        """
+        Determines if this lane should be hidden from the UI.
+
+        Returns:
+            bool: True to hide this lane, False to show it.
+        """
         return True
 
     @classmethod
     def priority_number(cls):
+        """
+        Defines the priority of this lane in the execution order.
+
+        Lower numbers have higher priority.
+
+        Returns:
+            int: The priority number.
+        """
         return 200
 
     @classmethod
     def condition(cls, name: str):
+        """
+        Checks if this lane should be enabled.
+
+        Args:
+            name: The queue name to check.
+
+        Returns:
+            bool: True if storage is configured, False otherwise.
+        """
         return cls.storage is not None
 
     def __process_mongo(
@@ -29,6 +52,16 @@ class NetworkHealth(Lane):
         ping_s,
         storage,
     ):
+        """
+        Process ping results and store them in MongoDB.
+
+        Args:
+            ping_s: Ping time in seconds, or None if ping failed.
+            storage: MongoDB collection to store the results.
+
+        Returns:
+            bool: True if processing was successful, False otherwise.
+        """
         try:
             from pymongo.collection import Collection
 
@@ -60,6 +93,14 @@ class NetworkHealth(Lane):
         return True
 
     def process(self, value):
+        """
+        Process the network health check.
+
+        This method pings various services and stores the results.
+
+        Args:
+            value: The value to process, not used in this lane.
+        """
         if self.__class__.storage is None:
             return
 

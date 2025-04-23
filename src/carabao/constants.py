@@ -1,5 +1,6 @@
 import os
 import re
+from typing import Optional
 
 from dotenv import load_dotenv
 from fun_things import lazy
@@ -10,9 +11,20 @@ from psycopg2._psycopg import connection
 @lazy
 class Constants:
     __env = False
+    __dev_mode: Optional[str] = None
+
+    @classmethod
+    def _dev_mode(cls, name: str):
+        cls.__dev_mode = name
 
     @classmethod
     def load_env(cls):
+        """
+        Loads environment variables from .env file based on the current environment.
+
+        This method loads the appropriate .env file based on the ENVIRONMENT variable
+        and sets up the environment for the application.
+        """
         if cls.__env:
             return
 
@@ -53,6 +65,12 @@ class Constants:
     @property
     @lazy.fn
     def PROCESSES(self):
+        """
+        The number of processes to use in the application.
+
+        Returns:
+            int or None: Number of processes to use, or None for default.
+        """
         self.load_env()
 
         return env(
@@ -80,6 +98,12 @@ class Constants:
     @property
     @lazy.fn
     def POD_NAME(self):
+        """
+        The name of the Kubernetes pod running this application.
+
+        Returns:
+            str: The pod name, or empty string if not in Kubernetes.
+        """
         self.load_env()
 
         return env(
@@ -91,6 +115,12 @@ class Constants:
     @property
     @lazy.fn
     def POD_INDEX(self):
+        """
+        The index of the pod in a stateful set, extracted from POD_NAME.
+
+        Returns:
+            int: The pod index, or 0 if not determinable.
+        """
         self.load_env()
 
         try:
@@ -117,6 +147,12 @@ class Constants:
     @property
     @lazy.fn
     def ENVIRONMENT(self):
+        """
+        The current environment the application is running in.
+
+        Returns:
+            str: The environment name (e.g., 'production', 'staging', 'development').
+        """
         self.load_env()
 
         return env(
@@ -128,18 +164,36 @@ class Constants:
     @property
     @lazy.fn
     def IN_DEVELOPMENT(self):
-        pass
+        """
+        Indicates if the application is ran via `carabao dev` or `moo dev`.
+
+        Returns:
+            bool: True if in development mode, False otherwise.
+        """
+        return self.__dev_mode is not None
 
     @property
     @lazy.fn
-    def ENV_IS_PRODUCTION(self):
+    def IS_PRODUCTION(self):
+        """
+        Indicates if the application is running in a production environment.
+
+        Returns:
+            bool: True if ENVIRONMENT equals 'production', False otherwise.
+        """
         self.load_env()
 
         return self.ENVIRONMENT == "production"
 
     @property
     @lazy.fn
-    def ENV_IS_STAGING(self):
+    def IS_STAGING(self):
+        """
+        Indicates if the application is running in a staging environment.
+
+        Returns:
+            bool: True if ENVIRONMENT equals 'staging', False otherwise.
+        """
         self.load_env()
 
         return self.ENVIRONMENT == "staging"
@@ -169,6 +223,12 @@ class Constants:
     @property
     @lazy.fn
     def SINGLE_RUN(self):
+        """
+        Determines if the application should run only once.
+
+        Returns:
+            bool: True if application should exit after one run, False for continuous execution.
+        """
         self.load_env()
         return env(
             "SINGLE_RUN",
@@ -179,7 +239,17 @@ class Constants:
     @property
     @lazy.fn
     def QUEUE_NAME(self):
+        """
+        The name of the queue to process.
+
+        Returns:
+            str or None: The queue name or None if not specified.
+        """
+        if self.__dev_mode is not None:
+            return self.__dev_mode
+
         self.load_env()
+
         return env(
             "QUEUE_NAME",
             cast=str,
@@ -189,6 +259,12 @@ class Constants:
     @property
     @lazy.fn
     def BATCH_SIZE(self):
+        """
+        The number of items to process in a batch.
+
+        Returns:
+            int: Batch size, defaults to 1 if not specified.
+        """
         self.load_env()
         return env(
             "BATCH_SIZE",
@@ -199,6 +275,12 @@ class Constants:
     @property
     @lazy.fn
     def SLEEP_MIN(self):
+        """
+        The minimum sleep time between loop iterations when no work is available.
+
+        Returns:
+            float: Minimum sleep time in seconds, defaults to 3.
+        """
         self.load_env()
 
         return env(
@@ -210,6 +292,12 @@ class Constants:
     @property
     @lazy.fn
     def SLEEP_MAX(self):
+        """
+        The maximum sleep time between loop iterations when no work is available.
+
+        Returns:
+            float: Maximum sleep time in seconds, defaults to 5.
+        """
         self.load_env()
 
         return env(
@@ -221,6 +309,12 @@ class Constants:
     @property
     @lazy.fn
     def EXIT_ON_FINISH(self):
+        """
+        Determines if the application should exit after all work is finished.
+
+        Returns:
+            bool: True if the application should exit when finished, False otherwise.
+        """
         self.load_env()
 
         return env(
@@ -232,6 +326,12 @@ class Constants:
     @property
     @lazy.fn
     def EXIT_DELAY(self):
+        """
+        The delay before exiting after all work is finished, when EXIT_ON_FINISH is True.
+
+        Returns:
+            float: Exit delay in seconds, defaults to 3.
+        """
         self.load_env()
 
         return env(

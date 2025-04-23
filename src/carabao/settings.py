@@ -57,6 +57,12 @@ class Settings:
 
     @classmethod
     def get_all_fields(cls):
+        """
+        Gets all field names defined in this class and its parent classes.
+
+        Yields:
+            str: Names of all fields defined in class annotations.
+        """
         yield from (
             key
             for sub_cls in cls.__mro__
@@ -66,9 +72,25 @@ class Settings:
 
     @classmethod
     def value_of(cls, key: str):
-        if hasattr(cls, key):
-            return getattr(cls, key)
+        """
+        Retrieves the value of a specified setting key.
 
+        This method first checks if the key exists in the Constants (C) object.
+        If the key is found and its value is callable, the method returns the result
+        of calling it. Otherwise, it returns the value directly.
+
+        If the key is not found in the Constants object, the method checks if the key
+        exists in the current class. If found, it returns the associated value.
+
+        Args:
+            key (str): The name of the setting key to retrieve.
+
+        Returns:
+            Any: The value associated with the specified key.
+
+        Raises:
+            ValueError: If the key is not found in either the Constants object or the class.
+        """
         if hasattr(C, key):
             value = getattr(C, key)
 
@@ -76,6 +98,9 @@ class Settings:
                 return value()
 
             return value
+
+        if hasattr(cls, key):
+            return getattr(cls, key)
 
         raise ValueError(f"Invalid setting key: {key}")
 

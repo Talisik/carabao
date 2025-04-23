@@ -5,6 +5,8 @@ from typing import Annotated
 
 import typer
 
+from carabao.constants import C
+
 from ..core import Core
 from ..settings import Settings
 from .display import Display
@@ -24,10 +26,19 @@ def dev(
         ),
     ] = "",
 ):
+    """
+    Run the pipeline in development mode.
+
+    If a lane name is provided, runs that specific lane.
+    Otherwise, displays a UI to select a lane to run.
+
+    Args:
+        name: The name of the lane to run.
+    """
     sys.path.insert(0, os.getcwd())
 
     if name.strip() != "":
-        os.environ["QUEUE_NAME"] = name
+        C._dev_mode(name)
 
         Core.start()
         return
@@ -43,7 +54,7 @@ def dev(
 
     # Run the program again.
 
-    os.environ["QUEUE_NAME"] = name
+    C._dev_mode(name)
 
     Core.start()
 
@@ -52,6 +63,11 @@ def dev(
     help="Run the pipeline in production mode.",
 )
 def run():
+    """
+    Run the pipeline in production mode.
+
+    This starts the Core with the default settings suitable for production.
+    """
     sys.path.insert(0, os.getcwd())
     Core.start()
 
@@ -69,6 +85,14 @@ def init(
         ),
     ] = False,
 ):
+    """
+    Initialize a new carabao project.
+
+    Creates the necessary directory structure and sample files.
+
+    Args:
+        skip: Whether to skip all interactive prompts.
+    """
     if not skip and os.path.exists("carabao.cfg"):
         if not typer.confirm(
             typer.style(
@@ -153,6 +177,18 @@ def new(
         typer.Argument(help="The name of the lane to create."),
     ],
 ):
+    """
+    Create a new lane from a template.
+
+    Creates a new lane Python file using the provided name. The name will be
+    converted to snake_case for the filename and PascalCase for the class name.
+
+    Args:
+        name: The name of the lane to create.
+
+    Raises:
+        Exception: If lane directories are not found or the lane already exists.
+    """
     lane_directories = [
         *Settings.get().value_of("LANE_DIRECTORIES"),
     ]
