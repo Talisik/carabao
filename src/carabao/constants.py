@@ -14,9 +14,6 @@ class Constants:
 
     @classmethod
     def _dev_mode(cls, name: str):
-        if cls.__dev_mode:
-            return
-
         cls.__dev_mode = True
         cls.__dev_name = name
 

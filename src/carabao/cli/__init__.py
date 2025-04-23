@@ -43,6 +43,8 @@ def dev(
         Core.start()
         return
 
+    C._dev_mode("")
+
     Core.load_lanes(Settings.get())
 
     # Draw the display.
