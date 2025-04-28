@@ -1,3 +1,4 @@
+import os
 from importlib import import_module
 from typing import Any, Iterable, Optional, final
 
@@ -91,7 +92,7 @@ class Settings:
         Raises:
             ValueError: If the key is not found in either the Constants object or the class.
         """
-        if hasattr(C, key):
+        if key in os.environ and hasattr(C, key):
             value = getattr(C, key)
 
             if callable(value):
