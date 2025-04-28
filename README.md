@@ -26,6 +26,8 @@
                        ####%%%#
 ```
 
+[GitHub](https://github.com/Talisik/carabao)
+
 A Python library for building robust publisher-subscriber (pub/sub) frameworks with built-in lanes for common tasks.
 
 ## Features
@@ -45,7 +47,7 @@ A Python library for building robust publisher-subscriber (pub/sub) frameworks w
 ## Installation
 
 ```sh
-pip install git+https://github.com/Talisik/carabao.git
+pip install carabao
 ```
 
 ## Requirements

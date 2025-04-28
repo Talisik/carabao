@@ -74,23 +74,21 @@ class Settings:
     @classmethod
     def value_of(cls, key: str):
         """
-        Retrieves the value of a specified setting key.
+        Gets the value of a setting by key name.
 
-        This method first checks if the key exists in the Constants (C) object.
-        If the key is found and its value is callable, the method returns the result
-        of calling it. Otherwise, it returns the value directly.
-
-        If the key is not found in the Constants object, the method checks if the key
-        exists in the current class. If found, it returns the associated value.
+        This method checks for the setting in the following order:
+        1. Environment variables (if also defined in C)
+        2. This class's attributes
+        3. C module attributes
 
         Args:
-            key (str): The name of the setting key to retrieve.
+            key (str): The name of the setting to retrieve.
 
         Returns:
-            Any: The value associated with the specified key.
+            The value of the requested setting.
 
         Raises:
-            ValueError: If the key is not found in either the Constants object or the class.
+            ValueError: If the setting key is not found in any of the checked locations.
         """
         if key in os.environ and hasattr(C, key):
             value = getattr(C, key)
@@ -102,6 +100,14 @@ class Settings:
 
         if hasattr(cls, key):
             return getattr(cls, key)
+
+        if hasattr(C, key):
+            value = getattr(C, key)
+
+            if callable(value):
+                return value()
+
+            return value
 
         raise ValueError(f"Invalid setting key: {key}")
 
