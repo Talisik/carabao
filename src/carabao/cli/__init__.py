@@ -5,11 +5,11 @@ import sys
 import typer
 from typing_extensions import Annotated
 
-from carabao.cfg.secret_cfg import SecretCFG
-from carabao.constants import C
-
+from ..cfg.secret_cfg import SecretCFG
+from ..constants import C
 from ..core import Core
 from ..settings import Settings
+from . import cli_init
 from .display import Display
 
 app = typer.Typer()
@@ -107,80 +107,34 @@ def init(
     Args:
         skip: Whether to skip all interactive prompts.
     """
-    if not skip and os.path.exists("carabao.cfg"):
-        if not typer.confirm(
-            typer.style(
-                "This directory is already initialized. Moooove forward anyway?",
-                fg=typer.colors.YELLOW,
-            ),
-        ):
-            return
+    if not cli_init.should_continue(skip):
+        return
 
-    use_src = not skip and typer.confirm(
-        typer.style(
-            "Use /src?",
-            fg=typer.colors.BRIGHT_BLUE,
-        ),
-        default=False,
+    use_src = cli_init.use_src(skip)
+
+    lane_directory = cli_init.lane_directory(
+        skip,
+        use_src,
     )
-
-    lane_directory: str = "src/lanes" if use_src else "lanes"
-    lane_directory = (
-        lane_directory
-        if skip
-        else typer.prompt(
-            typer.style(
-                "Lane Directory",
-                fg=typer.colors.BRIGHT_BLUE,
-            ),
-            default=lane_directory,
-        )
-    )
-
-    if not os.path.exists(lane_directory):
-        os.makedirs(lane_directory)
 
     root_path = os.path.dirname(__file__)
 
-    with open(f"{lane_directory}/starter_lane.py", "wb") as f:
-        with open(
-            os.path.join(
-                root_path,
-                "sample_starter.py",
-            ),
-            "rb",
-        ) as f2:
-            f.write(f2.read())
+    cli_init.new_starter_lane(
+        root_path,
+        lane_directory,
+    )
 
-    with open(f"{'src/' if use_src else ''}settings.py", "w") as f:
-        with open(
-            os.path.join(
-                root_path,
-                "sample_settings.py",
-            ),
-            "r",
-        ) as f2:
-            f.write(
-                f2.read().replace(
-                    "LANE_DIRECTORY",
-                    lane_directory.replace("/", "."),
-                )
-            )
+    cli_init.new_settings(
+        use_src,
+        root_path,
+        lane_directory,
+    )
 
-    with open("carabao.cfg", "w") as f:
-        f.write(
-            f"""[directories]
-settings = {"src." if use_src else ""}settings
-"""
-        )
+    cli_init.new_cfg(use_src)
 
-    if not os.path.exists(".env.development"):
-        with open(".env.development", "wb") as f:
-            f.write(b"")
+    cli_init.new_env()
 
-    if not os.path.exists(".env.release"):
-        with open(".env.release", "wb") as f:
-            f.write(b"")
+    cli_init.update_gitignore()
 
     typer.echo(
         typer.style(
