@@ -8,6 +8,7 @@ from typing_extensions import Annotated
 from ..cfg.secret_cfg import SecretCFG
 from ..constants import C
 from ..core import Core
+from ..helpers.prompter import Prompter
 from ..settings import Settings
 from . import cli_init
 from .display import Display
@@ -107,34 +108,53 @@ def init(
     Args:
         skip: Whether to skip all interactive prompts.
     """
-    if not cli_init.should_continue(skip):
-        return
+    prompter = Prompter()
 
-    use_src = cli_init.use_src(skip)
+    prompter.set("skip", skip)
+    prompter.set("root_path", os.path.dirname(__file__))
 
-    lane_directory = cli_init.lane_directory(
-        skip,
-        use_src,
+    prompter.add(
+        "should_continue",
+        cli_init.ShouldContinue(),
     )
 
-    root_path = os.path.dirname(__file__)
-
-    cli_init.new_starter_lane(
-        root_path,
-        lane_directory,
+    prompter.add(
+        "use_src",
+        cli_init.UseSrc(),
     )
 
-    cli_init.new_settings(
-        use_src,
-        root_path,
-        lane_directory,
+    prompter.add(
+        "lane_directory",
+        cli_init.LaneDirectory(),
     )
 
-    cli_init.new_cfg(use_src)
+    prompter.add(
+        "new_starter_lane",
+        cli_init.NewStarterLane(),
+    )
 
-    cli_init.new_env()
+    prompter.add(
+        "new_settings",
+        cli_init.NewSettings(),
+    )
 
-    cli_init.update_gitignore()
+    prompter.add(
+        "new_cfg",
+        cli_init.NewCfg(),
+    )
+
+    prompter.add(
+        "new_env",
+        cli_init.NewEnv(),
+    )
+
+    prompter.add(
+        "update_gitignore",
+        cli_init.UpdateGitIgnore(),
+    )
+
+    prompter.query()
+    prompter.do()
 
     typer.echo(
         typer.style(

@@ -2,188 +2,234 @@ import os
 
 import typer
 
+from carabao.helpers.prompter import Prompter
+
 from ..cfg.secret_cfg import SecretCFG
 
 
-def should_continue(skip: bool):
+class ShouldContinue(Prompter.Component[bool]):
     """
-    Determine if initialization should continue.
+    Checks if initialization should continue.
 
-    Args:
-        skip: If True, skip confirmation prompts
-
-    Returns:
-        bool: True if initialization should continue, False otherwise
+    Confirms with the user if a carabao.cfg file already exists,
+    otherwise automatically proceeds.
     """
-    if skip:
-        return True
 
-    if not os.path.exists("carabao.cfg"):
-        return True
+    priority_number = 3
 
-    return typer.confirm(
-        typer.style(
-            "This directory is already initialized. Moooove forward anyway?",
-            fg=typer.colors.YELLOW,
-        ),
-    )
+    def _query(self) -> bool:
+        if self["skip"]:
+            return True
 
+        if not os.path.exists("carabao.cfg"):
+            return True
 
-def use_src(skip: bool):
-    """
-    Determine if the /src directory should be used.
-
-    Args:
-        skip: If True, skip confirmation prompts
-
-    Returns:
-        bool: True if /src should be used, False otherwise
-    """
-    return not skip and typer.confirm(
-        typer.style(
-            "Use /src?",
-            fg=typer.colors.BRIGHT_BLUE,
-        ),
-        default=False,
-    )
-
-
-def lane_directory(skip: bool, use_src: bool):
-    """
-    Determine and create the lane directory.
-
-    Args:
-        skip: If True, skip confirmation prompts
-        use_src: If True, use /src directory structure
-
-    Returns:
-        str: Path to the lane directory
-    """
-    lane_directory: str = "src/lanes" if use_src else "lanes"
-    lane_directory = (
-        lane_directory
-        if skip
-        else typer.prompt(
+        return typer.confirm(
             typer.style(
-                "Lane Directory",
+                "This directory is already initialized. Moooove forward anyway?",
+                fg=typer.colors.YELLOW,
+            ),
+        )
+
+
+class UseSrc(Prompter.Component[bool]):
+    """
+    Determines if the project should use a src directory structure.
+
+    Prompts the user to decide whether to use a /src directory for the project,
+    unless skip is enabled.
+    """
+
+    priority_number = 2
+
+    def _query(self) -> bool:
+        return not self["skip"] and typer.confirm(
+            typer.style(
+                "Use /src?",
                 fg=typer.colors.BRIGHT_BLUE,
             ),
-            default=lane_directory,
+            default=False,
         )
-    )
-
-    if not os.path.exists(lane_directory):
-        os.makedirs(lane_directory)
-
-    return lane_directory
 
 
-def new_starter_lane(
-    root_path: str,
-    lane_directory: str,
-):
+class LaneDirectory(Prompter.Component[str]):
     """
-    Create a new starter lane file.
+    Determines the directory where lanes will be stored.
 
-    Args:
-        root_path: Root path of the application
-        lane_directory: Directory where lanes are stored
+    Creates the lane directory if it doesn't exist.
     """
-    with open(f"{lane_directory}/starter_lane.py", "wb") as f:
-        with open(
-            os.path.join(
-                root_path,
-                "sample_starter.py",
+
+    priority_number = 1
+
+    def _query(self) -> str:
+        lane_directory: str = "src/lanes" if self["use_src"] else "lanes"
+        lane_directory = (
+            lane_directory
+            if self["skip"]
+            else typer.prompt(
+                typer.style(
+                    "Lane Directory",
+                    fg=typer.colors.BRIGHT_BLUE,
+                ),
+                default=lane_directory,
+            )
+        )
+
+        if not os.path.exists(lane_directory):
+            os.makedirs(lane_directory)
+
+        return lane_directory
+
+
+class NewStarterLane(Prompter.Component):
+    """
+    Creates a starter lane file in the specified lane directory.
+
+    Copies the sample starter lane file to the project's lane directory.
+    """
+
+    def _do(self):
+        with open(f"{self['lane_directory']}/starter_lane.py", "wb") as f:
+            with open(
+                os.path.join(
+                    self["root_path"],
+                    "sample_starter.py",
+                ),
+                "rb",
+            ) as f2:
+                f.write(f2.read())
+
+        typer.echo(
+            typer.style(
+                "Created starter_lane.py.",
+                fg=typer.colors.GREEN,
             ),
-            "rb",
-        ) as f2:
-            f.write(f2.read())
+        )
 
 
-def new_settings(
-    use_src: bool,
-    root_path: str,
-    lane_directory: str,
-):
+class NewSettings(Prompter.Component):
     """
-    Create a new settings file.
+    Creates a settings.py file for the project.
 
-    Args:
-        use_src: If True, place settings in src directory
-        root_path: Root path of the application
-        lane_directory: Directory where lanes are stored
+    Copies the sample settings file and replaces placeholders with
+    the appropriate lane directory path.
     """
-    with open(f"{'src/' if use_src else ''}settings.py", "w") as f:
+
+    def _do(self):
         with open(
-            os.path.join(
-                root_path,
-                "sample_settings.py",
-            ),
-            "r",
-        ) as f2:
-            f.write(
-                f2.read().replace(
-                    "LANE_DIRECTORY",
-                    lane_directory.replace("/", "."),
+            f"{'src/' if self['use_src'] else ''}settings.py",
+            "w",
+        ) as f:
+            with open(
+                os.path.join(
+                    self["root_path"],
+                    "sample_settings.py",
+                ),
+                "r",
+            ) as f2:
+                f.write(
+                    f2.read().replace(
+                        "LANE_DIRECTORY",
+                        self["lane_directory"].replace("/", "."),
+                    )
                 )
+
+        typer.echo(
+            typer.style(
+                "Created settings.py.",
+                fg=typer.colors.GREEN,
+            ),
+        )
+
+
+class NewCfg(Prompter.Component):
+    """
+    Creates a carabao.cfg configuration file.
+
+    Sets up the initial configuration with the appropriate settings path.
+    """
+
+    def _do(self):
+        with open("carabao.cfg", "w") as f:
+            f.write(
+                f"""[directories]
+    settings = {"src." if self["use_src"] else ""}settings
+    """
             )
 
-
-def new_cfg(
-    use_src: bool,
-):
-    """
-    Create a new configuration file.
-
-    Args:
-        use_src: If True, reference settings in src directory
-    """
-    with open("carabao.cfg", "w") as f:
-        f.write(
-            f"""[directories]
-settings = {"src." if use_src else ""}settings
-"""
+        typer.echo(
+            typer.style(
+                "Created carabao.cfg.",
+                fg=typer.colors.GREEN,
+            ),
         )
 
 
-def new_env():
+class NewEnv(Prompter.Component):
     """
-    Create new environment files if they don't exist.
+    Creates environment files for development and release.
+
+    Creates .env.development and .env.release files if they don't exist.
     """
-    if not os.path.exists(".env.development"):
-        with open(".env.development", "wb") as f:
-            f.write(b"")
 
-    if not os.path.exists(".env.release"):
-        with open(".env.release", "wb") as f:
-            f.write(b"")
+    def _do(self):
+        if not os.path.exists(".env.development"):
+            with open(".env.development", "wb") as f:
+                f.write(b"")
+
+        typer.echo(
+            typer.style(
+                "Created .env.development.",
+                fg=typer.colors.GREEN,
+            ),
+        )
+
+        if not os.path.exists(".env.release"):
+            with open(".env.release", "wb") as f:
+                f.write(b"")
+        typer.echo(
+            typer.style(
+                "Created .env.release.",
+                fg=typer.colors.GREEN,
+            ),
+        )
 
 
-def update_gitignore():
+class UpdateGitIgnore(Prompter.Component[bool]):
     """
-    Update .gitignore to include the secret configuration file.
+    Updates the .gitignore file to include the secret configuration file.
 
-    Asks for confirmation before updating.
+    Adds the SecretCFG filepath to .gitignore if it doesn't already exist.
     """
-    ok = typer.confirm(
-        typer.style(
-            "Update .gitignore?",
-            fg=typer.colors.BRIGHT_BLUE,
-        ),
-        default=True,
-    )
 
-    if not ok:
-        return
+    def _query(self) -> bool:
+        return self["skip"] or typer.confirm(
+            typer.style(
+                "Update .gitignore?",
+                fg=typer.colors.BRIGHT_BLUE,
+            ),
+            default=True,
+        )
 
-    ignore_entry = SecretCFG.filepath
-
-    if not os.path.exists(".gitignore"):
-        return
-
-    with open(".gitignore", "r") as f:
-        if ignore_entry in f.read():
+    def _do(self):
+        if not self["update_gitignore"]:
             return
 
-    with open(".gitignore", "a") as f:
-        f.write(f"\n{ignore_entry}")
+        ignore_entry = SecretCFG.filepath
+
+        if not os.path.exists(".gitignore"):
+            return
+
+        with open(".gitignore", "r") as f:
+            if ignore_entry in f.read():
+                return
+
+        with open(".gitignore", "a") as f:
+            f.write(f"\n{ignore_entry}")
+
+        typer.echo(
+            typer.style(
+                "Updated .gitignore.",
+                fg=typer.colors.GREEN,
+            ),
+        )
