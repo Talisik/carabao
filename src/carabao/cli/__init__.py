@@ -5,6 +5,7 @@ import sys
 import typer
 from typing_extensions import Annotated
 
+from carabao.cfg.secret_cfg import SecretCFG
 from carabao.constants import C
 
 from ..core import Core
@@ -55,6 +56,15 @@ def dev(
 
     if not name:
         return
+
+    cfg = SecretCFG()
+
+    cfg.write(
+        section=cfg.LAST_RUN,
+        key=cfg.QUEUE_NAME,
+        value=name,
+    )
+    cfg.save()
 
     # Run the program again.
 

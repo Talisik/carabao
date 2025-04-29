@@ -63,6 +63,17 @@ class BaseCFG(ABC):
 
         return self.parser[text]
 
+    def write(
+        self,
+        section: str,
+        key: str,
+        value: str,
+    ):
+        """
+        Writes a value to a section.
+        """
+        self.get_section(section)[key] = value
+
     def save(self):
         """
         Saves the `.cfg` file.
