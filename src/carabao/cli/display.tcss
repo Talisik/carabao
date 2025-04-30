@@ -52,6 +52,7 @@ Button:hover {
     margin-bottom: 1;
     padding: 1;
     border: round #565f89;
+    overflow: auto;
 }
 
 .info-label {
