@@ -135,7 +135,9 @@ class Display(App):
         lane = self.lanes[lane_name]
 
         if self.docstring_widget:
-            docstring = inspect.getdoc(lane) or "No documentation available."
+            docstring = lane.__doc__ or "No documentation available."
+            docstring = docstring.replace("[", "\\[")
+
             self.docstring_widget.update(docstring)
 
         if self.name_widget:
