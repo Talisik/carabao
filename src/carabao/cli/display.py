@@ -171,12 +171,13 @@ class Display(App):
                     (
                         "+" if priority_number >= 0 else "-",
                         abs(priority_number),
+                        priority_number,
                         sub_lane,
                     )
                     for priority_number, sub_lane in sub_lanes.items()
                     if sub_lane is not None
                 ),
-                key=lambda x: x[0],
+                key=lambda x: x[2],
             )
             equal_signs = all(v[0] == "+" for v in items) or all(
                 v[0] == "-" for v in items
@@ -192,6 +193,7 @@ class Display(App):
             for i, (
                 sign,
                 priority_number,
+                _,
                 sub_lane,
             ) in enumerate(items):
                 if sub_lane is None:
