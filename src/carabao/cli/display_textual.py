@@ -34,15 +34,19 @@ class DisplayTextual(App):
             if not any(queue_names):
                 raise Exception("No lanes found!")
 
+            n = 0
+
             for queue_name in queue_names:
                 yield Button(
                     f"{queue_name}",
-                    id=f"lane-{queue_name}",
-                    classes="lane-button",
+                    id=f"lane-{n}",
+                    classes=f"lane-button {queue_name}",
                     variant="success"
                     if queue_name == last_run_queue_name
                     else "default",
                 )
+
+                n += 1
 
         yield Button("Exit", id="exit-button", variant="error")
 
