@@ -5,8 +5,6 @@ import sys
 import typer
 from typing_extensions import Annotated
 
-from carabao.cli.display_textual import DisplayTextual
-
 from ..cfg.secret_cfg import SecretCFG
 from ..constants import C
 from ..core import Core
@@ -55,7 +53,7 @@ def dev(
 
     # Draw the display.
 
-    name = DisplayTextual().run(inline=True)  # type: ignore
+    name = Display().run()  # type: ignore
     # name = Display().run()
 
     if not name:
