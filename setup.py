@@ -8,4 +8,8 @@ if __name__ == "__main__":
                 "moo = carabao.cli:app",
             }
         },
+        package_data={
+            "carabao.cli": ["*.tcss"],
+        },
+        include_package_data=True,
     )

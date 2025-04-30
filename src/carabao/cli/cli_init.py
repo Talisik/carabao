@@ -45,7 +45,7 @@ class UseSrc(Prompter.Component[bool]):
     def _query(self) -> bool:
         return not self["skip"] and typer.confirm(
             typer.style(
-                "Use /src?",
+                "Use /src folder as the root directory?",
                 fg=typer.colors.BRIGHT_BLUE,
             ),
             default=False,
@@ -205,7 +205,7 @@ class UpdateGitIgnore(Prompter.Component[bool]):
     def _query(self) -> bool:
         return self["skip"] or typer.confirm(
             typer.style(
-                "Update .gitignore?",
+                "Update .gitignore to include carabao-specific files?",
                 fg=typer.colors.BRIGHT_BLUE,
             ),
             default=True,
