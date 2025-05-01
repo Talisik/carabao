@@ -41,7 +41,7 @@ class DevDisplay(App):
                     self.lanes = {
                         lane.first_name(): lane
                         for lane in Lane.available_lanes()
-                        if lane.primary() and not lane.hidden()
+                        if lane.primary() and not lane.passive()
                     }
                     queue_names = sorted(self.lanes.keys())
 
