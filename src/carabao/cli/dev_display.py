@@ -1,4 +1,3 @@
-import inspect
 import os
 
 from l2l import Lane

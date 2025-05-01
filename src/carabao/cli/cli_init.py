@@ -93,7 +93,7 @@ class NewStarterLane(Prompter.Component):
             with open(
                 os.path.join(
                     self["root_path"],
-                    "sample_starter.py",
+                    "sample.starter.py",
                 ),
                 "rb",
             ) as f2:
@@ -123,7 +123,7 @@ class NewSettings(Prompter.Component):
             with open(
                 os.path.join(
                     self["root_path"],
-                    "sample_settings.py",
+                    "sample.settings.py",
                 ),
                 "r",
             ) as f2:
@@ -150,12 +150,21 @@ class NewCfg(Prompter.Component):
     """
 
     def _do(self):
+        settings_path = "src.settings" if self["use_src"] else "settings"
+
         with open("carabao.cfg", "w") as f:
-            f.write(
-                f"""[directories]
-    settings = {"src." if self["use_src"] else ""}settings
-    """
-            )
+            with open(
+                os.path.join(
+                    self["root_path"],
+                    "sample.carabao.cfg",
+                ),
+                "r",
+            ) as f2:
+                f.write(
+                    f2.read().format(
+                        SETTINGS_PATH=settings_path,
+                    )
+                )
 
         typer.echo(
             typer.style(

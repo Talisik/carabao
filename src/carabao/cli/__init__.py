@@ -189,7 +189,10 @@ def new(
     sys.path.insert(0, os.getcwd())
 
     lane_directories = [
-        *Settings.get().value_of("LANE_DIRECTORIES"),
+        *map(
+            lambda x: x.replace(".", "/"),
+            Settings.get().value_of("LANE_DIRECTORIES"),
+        ),
     ]
 
     if not lane_directories:
@@ -218,7 +221,7 @@ def new(
             with open(
                 os.path.join(
                     os.path.dirname(__file__),
-                    "sample_lane.py",
+                    "sample.lane.py",
                 ),
                 "r",
             ) as f2:

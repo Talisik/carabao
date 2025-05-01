@@ -13,13 +13,7 @@ class NetworkHealth(Lane):
     catcher = StdOutCatcher()
 
     @classmethod
-    def hidden(cls):
-        """
-        Determines if this lane should be hidden from the UI.
-
-        Returns:
-            bool: True to hide this lane, False to show it.
-        """
+    def passive(cls):
         return True
 
     @classmethod

@@ -15,7 +15,7 @@ class PrettyEnv(Lane):
     """
 
     @classmethod
-    def hidden(cls) -> bool:
+    def passive(cls) -> bool:
         return True
 
     @classmethod
