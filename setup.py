@@ -9,7 +9,7 @@ if __name__ == "__main__":
             }
         },
         package_data={
-            "carabao.cli": ["*.tcss"],
+            "carabao.cli": ["*.tcss", "*.cfg"],
         },
         include_package_data=True,
     )

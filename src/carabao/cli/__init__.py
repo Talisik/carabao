@@ -12,6 +12,7 @@ from ..helpers.prompter import Prompter
 from ..settings import Settings
 from . import cli_init
 from .dev_display import DevDisplay
+from .new_display import NewDisplay
 
 app = typer.Typer()
 
@@ -172,13 +173,14 @@ def new(
     name: Annotated[
         str,
         typer.Argument(help="The name of the lane to create."),
-    ],
+    ] = "",
 ):
     """
     Create a new lane from a template.
 
     Creates a new lane Python file using the provided name. The name will be
     converted to snake_case for the filename and PascalCase for the class name.
+    If no name is provided, displays a UI to select a template type first.
 
     Args:
         name: The name of the lane to create.
@@ -187,6 +189,24 @@ def new(
         Exception: If lane directories are not found or the lane already exists.
     """
     sys.path.insert(0, os.getcwd())
+
+    # Default template file
+    template_file = "sample.lane.py"
+    template_type = None
+
+    # If no name is provided, show the template selection UI
+    if name.strip() == "":
+        template_type = NewDisplay().run()  # type: ignore
+
+        if not template_type:
+            return
+
+        # Now prompt for a name
+        name = typer.prompt("Enter the name for your new lane")
+
+        if name.strip() == "":
+            typer.echo("No name provided. Exiting.")
+            return
 
     lane_directories = [
         *map(
@@ -203,7 +223,18 @@ def new(
         "_",
         name,
     ).lower()
-    name = "".join(word.capitalize() for word in filename.split("_"))
+    class_name = "".join(word.capitalize() for word in filename.split("_"))
+
+    # If template_type was selected, use the corresponding template file
+    if template_type:
+        template_map = {
+            "Basic Lane": "sample.lane.py",
+            "Starter Lane": "sample.starter.py",
+            "Factory Lane": "sample.factory.py",
+            "Passive Lane": "sample.passive.py",
+            "Subscriber Lane": "sample.subscriber.py",
+        }
+        template_file = template_map.get(template_type, "sample.lane.py")
 
     for lane_directory in lane_directories:
         if not os.path.exists(lane_directory):
@@ -221,17 +252,23 @@ def new(
             with open(
                 os.path.join(
                     os.path.dirname(__file__),
-                    "sample.lane.py",
+                    template_file,
                 ),
                 "r",
             ) as f2:
                 f.write(
                     f2.read().replace(
                         "LANE_NAME",
-                        name,
+                        class_name,
                     )
                 )
 
+        typer.echo(
+            typer.style(
+                f"Lane '{class_name}' created successfully!",
+                fg=typer.colors.GREEN,
+            )
+        )
         return
 
-    raise Exception(f"Lane '{name}' already exists!")
+    raise Exception(f"Lane '{class_name}' already exists!")

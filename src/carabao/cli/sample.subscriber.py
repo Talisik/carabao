@@ -7,17 +7,21 @@ class Payloads(Lane):
         yield "World"
 
 
-class Processor(Lane):
+class Process(Lane):
     def process(self, value):
         print(value)
 
 
 class Main(Lane):
+    """
+    A subscriber pattern implementation where lanes process data in sequence.
+    """
+
     use_filename: bool = True
 
     lanes = {
-        -100: Payloads,  # Runs first (data producer)
-        100: Processor,  # Runs second (data consumer)
+        1: Payloads,
+        2: Process,
     }
 
     @classmethod

@@ -24,7 +24,7 @@ class PrettyEnv(Lane):
 
     @classmethod
     def priority_number(cls):
-        return 200
+        return -2000
 
     @classmethod
     def max_run_count(cls) -> int:

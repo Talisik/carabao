@@ -57,7 +57,7 @@ class LogToDB(Lane):
 
     @classmethod
     def priority_number(cls):
-        return -100
+        return -1900
 
     @classmethod
     def condition(cls, name: str):

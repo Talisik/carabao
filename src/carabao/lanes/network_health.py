@@ -26,7 +26,7 @@ class NetworkHealth(Lane):
         Returns:
             int: The priority number.
         """
-        return 200
+        return -1900
 
     @classmethod
     def condition(cls, name: str):
