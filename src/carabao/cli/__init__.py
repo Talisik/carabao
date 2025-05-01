@@ -190,24 +190,6 @@ def new(
     """
     sys.path.insert(0, os.getcwd())
 
-    # Default template file
-    template_file = "sample.lane.py"
-    template_type = None
-
-    # If no name is provided, show the template selection UI
-    if name.strip() == "":
-        template_type = NewDisplay().run()  # type: ignore
-
-        if not template_type:
-            return
-
-        # Now prompt for a name
-        name = typer.prompt("Enter the name for your new lane")
-
-        if name.strip() == "":
-            typer.echo("No name provided. Exiting.")
-            return
-
     lane_directories = [
         *map(
             lambda x: x.replace(".", "/"),
@@ -217,6 +199,55 @@ def new(
 
     if not lane_directories:
         raise Exception("Lane directory not found!")
+
+    # Default template file
+    template_file = "sample.basic.py"
+    template_type = None
+    custom_lane_directory = None
+
+    display = NewDisplay()
+    display.lane_name = name
+    display.lane_directory = lane_directories[0]
+
+    result = display.run()  # type: ignore
+
+    if not result:
+        return
+
+    # Unpack the tuple returned from NewDisplay
+    if isinstance(result, tuple) and len(result) >= 3:
+        template_type = result[0]
+        input_name = result[1]
+        input_directory = result[2]
+
+        # Use the input name if provided
+        if input_name and input_name.strip():
+            name = input_name.strip()
+        else:
+            # Prompt for a name if not provided in the UI
+            name = typer.prompt("Enter the name for your new lane")
+
+        if name.strip() == "":
+            typer.echo("No name provided. Exiting.")
+            return
+
+        # Use the custom directory if provided
+        if input_directory and input_directory.strip():
+            custom_lane_directory = input_directory.strip()
+    else:
+        # Backwards compatibility with previous version
+        template_type = str(result)
+
+        # Prompt for a name
+        name = typer.prompt("Enter the name for your new lane")
+
+        if name.strip() == "":
+            typer.echo("No name provided. Exiting.")
+            return
+
+    # If a custom lane directory was provided, use it instead
+    if custom_lane_directory:
+        lane_directories = [custom_lane_directory]
 
     filename = re.sub(
         r"(?<=[a-z])(?=[A-Z0-9])|(?<=[A-Z0-9])(?=[A-Z][a-z])|(?<=[A-Za-z])(?=\d)",
@@ -228,13 +259,15 @@ def new(
     # If template_type was selected, use the corresponding template file
     if template_type:
         template_map = {
-            "Basic Lane": "sample.lane.py",
-            "Starter Lane": "sample.starter.py",
+            "Basic Lane": "sample.basic.py",
             "Factory Lane": "sample.factory.py",
             "Passive Lane": "sample.passive.py",
             "Subscriber Lane": "sample.subscriber.py",
         }
-        template_file = template_map.get(template_type, "sample.lane.py")
+        template_file = template_map.get(
+            str(template_type),
+            "sample.basic.py",
+        )
 
     for lane_directory in lane_directories:
         if not os.path.exists(lane_directory):

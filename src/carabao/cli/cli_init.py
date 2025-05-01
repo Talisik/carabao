@@ -89,11 +89,11 @@ class NewStarterLane(Prompter.Component):
     """
 
     def _do(self):
-        with open(f"{self['lane_directory']}/starter_lane.py", "wb") as f:
+        with open(f"{self['lane_directory']}/my_lane.py", "wb") as f:
             with open(
                 os.path.join(
                     self["root_path"],
-                    "sample.starter.py",
+                    "sample.basic.py",
                 ),
                 "rb",
             ) as f2:
@@ -101,7 +101,7 @@ class NewStarterLane(Prompter.Component):
 
         typer.echo(
             typer.style(
-                "Created starter_lane.py.",
+                "Created my_lane.py.",
                 fg=typer.colors.GREEN,
             ),
         )

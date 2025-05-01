@@ -4,11 +4,15 @@ from textual import on
 from textual.app import App
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, ScrollableContainer, Vertical
-from textual.widgets import Button, Label
+from textual.widgets import Button, Checkbox, Input, Label
 
 
 class NewDisplay(App):
-    """A Textual app to display and select sample lane templates."""
+    lane_name: str = "MyLane"
+    lane_directory: str = "lanes"
+
+    DEFAULT_LANE_NAME = "MyLane"
+    DEFAULT_LANE_DIRECTORY = "lanes"
 
     BINDINGS = [
         Binding("up", "focus_previous", "Move up"),
@@ -39,10 +43,6 @@ class NewDisplay(App):
                         "Basic Lane": {
                             "file": "sample.lane.py",
                             "description": "A simple lane that processes data sequentially.",
-                        },
-                        "Starter Lane": {
-                            "file": "sample.starter.py",
-                            "description": "A lane that initiates a processing pipeline.",
                         },
                         "Factory Lane": {
                             "file": "sample.factory.py",
@@ -76,47 +76,81 @@ class NewDisplay(App):
                     if self.template_buttons:
                         self.template_buttons[0].focus()
 
-                # Container for template content (side by side with templates)
-                with Container(id="info-container"):
-                    yield Label(
-                        "Template Type",
-                        classes="info-label",
-                    )
+                # Vertical container for inputs and info
+                with Vertical(id="right-container"):
+                    # Text inputs section
+                    with Container(id="inputs-container"):
+                        yield Label(
+                            "Name",
+                            classes="input-label",
+                        )
+                        self.name_input = Input(
+                            value=self.lane_name,
+                            placeholder=self.DEFAULT_LANE_NAME,
+                            id="name-input",
+                        )
+                        yield self.name_input
 
-                    self.name_widget = Label(
-                        "",
-                        classes="info-widget",
-                    )
+                        yield Label(
+                            "Directory",
+                            classes="input-label",
+                        )
+                        self.directory_input = Input(
+                            value=self.lane_directory,
+                            placeholder=self.DEFAULT_LANE_DIRECTORY,
+                            id="directory-input",
+                        )
 
-                    yield self.name_widget
-                    yield Label(
-                        "Description",
-                        classes="info-label",
-                    )
+                        yield self.directory_input
 
-                    self.description_widget = Label(
-                        "",
-                        classes="info-widget",
-                    )
+                        self.use_filename_checkbox = Checkbox(
+                            "Filename as name?",
+                            value=False,
+                            id="use-filename-checkbox",
+                        )
+                        yield self.use_filename_checkbox
 
-                    yield self.description_widget
-                    yield Label(
-                        "Content Preview",
-                        classes="info-label",
-                    )
+                    # Container for template content
+                    with Container(id="info-container"):
+                        yield Label(
+                            "Template Type",
+                            classes="info-label",
+                        )
 
-                    self.content_widget = Label(
-                        "",
-                        id="content",
-                        classes="info-widget",
-                    )
+                        self.name_widget = Label(
+                            "",
+                            classes="info-widget",
+                        )
 
-                    yield self.content_widget
+                        yield self.name_widget
+                        yield Label(
+                            "Description",
+                            classes="info-label",
+                        )
+
+                        self.description_widget = Label(
+                            "",
+                            classes="info-widget",
+                        )
+
+                        yield self.description_widget
+                        yield Label(
+                            "Content Preview",
+                            classes="info-label",
+                        )
+
+                        self.content_widget = Label(
+                            "",
+                            id="content",
+                            classes="info-widget",
+                        )
+
+                        yield self.content_widget
 
             # Container for action buttons at bottom
             with Horizontal(id="navi-container"):
                 yield Button(
-                    "\\[Enter] Select",
+                    "\\[Enter] Create",
                     id="select",
                 )
 
@@ -187,7 +221,25 @@ class NewDisplay(App):
 
     @on(Button.Pressed, "#select")
     def on_select(self):
-        self.exit(str(self.template_buttons[self.current_index].label))
+        lane_name = (
+            self.name_input.value
+            if hasattr(self, "name_input") and self.name_input.value
+            else None
+        )
+        lane_directory = (
+            self.directory_input.value
+            if hasattr(self, "directory_input") and self.directory_input.value
+            else None
+        )
+        use_filename = (
+            self.use_filename_checkbox.value
+            if hasattr(self, "use_filename_checkbox")
+            else False
+        )
+        template_name = str(self.template_buttons[self.current_index].label)
+
+        # Return a tuple with all information
+        self.exit((template_name, lane_name, lane_directory, use_filename))
 
     @on(Button.Pressed, ".template-button")
     def template_button_pressed(self, event: Button.Pressed):

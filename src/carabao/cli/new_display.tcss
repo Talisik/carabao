@@ -1,5 +1,5 @@
 Screen {
-    background: #1a1b26;
+    background: #2b5329;
     color: #a9b1d6;
 }
 
@@ -13,7 +13,7 @@ Horizontal {
     align: left top;
     margin: 0;
     margin-bottom: 1;
-    border: round #565f89;
+    border: round #3a7038;
     padding: 0;
     overflow: auto;
     overflow-x: hidden;
@@ -25,9 +25,9 @@ Button {
     padding: 0;
     width: 100%;
     height: 3;
-    background: #1a1b26;
+    background: #2b5329;
     color: #c0caf5;
-    border: tall #565f89;
+    border: tall #3a7038;
     align: left middle;
 }
 
@@ -36,30 +36,30 @@ Button.template-button {
 }
 
 Button:focus {
-    background: #3b4261;
+    background: #3a7038;
     color: #7aa2f7;
     text-style: bold;
 }
 
 Button:hover {
-    background: #414868;
+    background: #4a8048;
 }
 
 #info-container {
     margin: 0;
     margin-bottom: 1;
     padding: 1;
-    border: round #565f89;
+    border: round #3a7038;
     overflow: auto;
 }
 
 .info-label {
     text-style: bold;
-    color: #bb9af7;
+    color: #9ece6a;
 }
 
 .info-widget {
-    background: #24283b;
+    background: #1e3b1d;
     color: #c0caf5;
     height: auto;
     width: 100%;
@@ -71,8 +71,6 @@ Button:hover {
 
 #content {
     min-height: 10;
-    text-style: none;
-    font-family: monospace;
 }
 
 #navi-container {
@@ -83,13 +81,13 @@ Button:hover {
 
 #select {
     width: 30%;
-    background: #1a1b26;
+    background: #2b5329;
     color: #9ece6a;
     border: tall #9ece6a;
 }
 
 #exit {
-    background: #1a1b26;
+    background: #2b5329;
     width: 20%;
     color: #f7768e;
     border: tall #f7768e;
@@ -97,23 +95,51 @@ Button:hover {
 }
 
 #exit:focus {
-    background: #24283b;
+    background: #1e3b1d;
     color: #ff7a93;
     border: tall #ff7a93;
 }
 
 #exit:hover {
-    background: #414868;
+    background: #4a8048;
     color: #ff7a93;
 }
 
 #select:focus {
-    background: #24283b;
+    background: #1e3b1d;
     color: #9ece6a;
     border: tall #9ece6a;
 }
 
 #select:hover {
-    background: #414868;
+    background: #4a8048;
     color: #9ece6a;
+}
+
+#right-container {
+    width: 70%;
+}
+
+#inputs-container {
+    margin: 0;
+    padding: 1;
+    border: round #3a7038;
+    height: auto;
+}
+
+.input-label {
+    text-style: bold;
+    color: #9ece6a;
+    margin-bottom: 1;
+}
+
+Input {
+    margin-bottom: 1;
+    background: #1e3b1d;
+    border: tall #3a7038;
+    color: #c0caf5;
+}
+
+Input:focus {
+    border: tall #9ece6a;
 } 

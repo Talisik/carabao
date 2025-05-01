@@ -13,10 +13,6 @@ class Process(Lane):
 
 
 class Main(Lane):
-    """
-    A subscriber pattern implementation where lanes process data in sequence.
-    """
-
     use_filename: bool = True
 
     lanes = {
