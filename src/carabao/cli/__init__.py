@@ -11,7 +11,7 @@ from ..core import Core
 from ..helpers.prompter import Prompter
 from ..settings import Settings
 from . import cli_init
-from .display import Display
+from .dev_display import DevDisplay
 
 app = typer.Typer()
 
@@ -53,7 +53,7 @@ def dev(
 
     # Draw the display.
 
-    name = Display().run()  # type: ignore
+    name = DevDisplay().run()  # type: ignore
     # name = Display().run()
 
     if not name:
@@ -186,6 +186,8 @@ def new(
     Raises:
         Exception: If lane directories are not found or the lane already exists.
     """
+    sys.path.insert(0, os.getcwd())
+
     lane_directories = [
         *Settings.get().value_of("LANE_DIRECTORIES"),
     ]

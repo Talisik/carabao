@@ -11,7 +11,7 @@ from textual.widgets import Button, Label
 from ..cfg.secret_cfg import SecretCFG
 
 
-class Display(App):
+class DevDisplay(App):
     """A Textual app to display and select lanes."""
 
     BINDINGS = [
@@ -22,7 +22,7 @@ class Display(App):
 
     CSS_PATH = os.path.join(
         os.path.dirname(__file__),
-        "display.tcss",
+        "dev_display.tcss",
     )
 
     def __init__(self):
