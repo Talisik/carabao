@@ -1,18 +1,13 @@
 Screen {
     background: #2b5329;
-    color: #a9b1d6;
+    color:rgb(169, 214, 184);
 }
 
-Horizontal {
-    height: auto;
-    padding: 0;
-    margin: 0;
-}
-
-#templates-container {
+ListView {
     align: left top;
     margin: 0;
     margin-bottom: 1;
+    background: black 0%;
     border: round #3a7038;
     padding: 0;
     overflow: auto;
@@ -20,36 +15,31 @@ Horizontal {
     width: 30%;
 }
 
-Button {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 3;
-    background: #2b5329;
-    color: #c0caf5;
-    border: tall #3a7038;
-    align: left middle;
-}
-
-Button.template-button {
-    border: none;
+ListItem {
+    padding: 1 2;
 }
 
 Button:focus {
-    background: #3a7038;
-    color: #7aa2f7;
     text-style: bold;
 }
 
-Button:hover {
-    background: #4a8048;
+Switch {
+    padding: 0;
+    border: none;
+}
+
+.switch {
+    height: auto;
+    width: auto;
+    padding: 1;
+}
+
+.switch > Label {
+    margin-left: 2;
 }
 
 #info-container {
-    margin: 0;
-    margin-bottom: 1;
-    padding: 1;
-    border: round #3a7038;
+    margin: 1;
     overflow: auto;
 }
 
@@ -81,39 +71,11 @@ Button:hover {
 
 #select {
     width: 30%;
-    background: #2b5329;
-    color: #9ece6a;
-    border: tall #9ece6a;
 }
 
 #exit {
-    background: #2b5329;
     width: 20%;
-    color: #f7768e;
-    border: tall #f7768e;
     dock: right;
-}
-
-#exit:focus {
-    background: #1e3b1d;
-    color: #ff7a93;
-    border: tall #ff7a93;
-}
-
-#exit:hover {
-    background: #4a8048;
-    color: #ff7a93;
-}
-
-#select:focus {
-    background: #1e3b1d;
-    color: #9ece6a;
-    border: tall #9ece6a;
-}
-
-#select:hover {
-    background: #4a8048;
-    color: #9ece6a;
 }
 
 #right-container {
@@ -123,14 +85,15 @@ Button:hover {
 #inputs-container {
     margin: 0;
     padding: 1;
+    padding-bottom: 0;
     border: round #3a7038;
     height: auto;
 }
 
 .input-label {
+    margin: 0;
     text-style: bold;
     color: #9ece6a;
-    margin-bottom: 1;
 }
 
 Input {
@@ -142,4 +105,29 @@ Input {
 
 Input:focus {
     border: tall #9ece6a;
+}
+
+Checkbox {
+    background: #2b5329;
+    color:rgb(192, 245, 214);
+    padding: 1 2;
+    border: none;
+}
+
+Checkbox:focus {
+    background: #3a7038;
+    color: #9ece6a;
+}
+
+Checkbox > .toggle {
+    background: #1e3b1d;
+    color: #9ece6a;
+}
+
+Checkbox.-on > .toggle {
+    background: #3a7038;
+}
+
+Checkbox.-on > .toggle--indicator {
+    color: #9ece6a;
 } 

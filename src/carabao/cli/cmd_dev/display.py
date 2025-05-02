@@ -1,34 +1,32 @@
 import os
+from typing import List
 
 from l2l import Lane
 from textual import on
 from textual.app import App
 from textual.binding import Binding
-from textual.containers import Container, Horizontal, ScrollableContainer, Vertical
-from textual.widgets import Button, Label
+from textual.containers import Container, Horizontal, Vertical
+from textual.widgets import Button, Label, ListItem, ListView
 
-from ..cfg.secret_cfg import SecretCFG
+from ...cfg.secret_cfg import SecretCFG
 
 
-class DevDisplay(App):
-    """A Textual app to display and select lanes."""
-
+class Display(App):
     BINDINGS = [
-        Binding("up", "focus_previous", "Move up"),
-        Binding("down", "focus_next", "Move down"),
         Binding("escape", "exit_app", "Exit"),
     ]
 
     CSS_PATH = os.path.join(
         os.path.dirname(__file__),
-        "dev_display.tcss",
+        "display.tcss",
     )
+
+    lane_list: ListView
 
     def __init__(self):
         super().__init__()
-        self.current_index = 0
-        self.lane_buttons = []
         self.lanes = {}
+        self.queue_names: List[str] = []
         self.docstring_widget = None
 
     def compose(self):
@@ -36,34 +34,35 @@ class DevDisplay(App):
         # Main layout container with horizontal arrangement
         with Vertical():
             with Horizontal():
-                # Scrollable container for lane buttons
-                with ScrollableContainer(id="lanes-container"):
-                    self.lanes = {
-                        lane.first_name(): lane
-                        for lane in Lane.available_lanes()
-                        if lane.primary() and not lane.passive()
-                    }
-                    queue_names = sorted(self.lanes.keys())
+                # ListView for lanes
+                self.lanes = {
+                    lane.first_name(): lane
+                    for lane in Lane.available_lanes()
+                    if lane.primary() and not lane.passive()
+                }
+                self.queue_names = sorted(self.lanes.keys())
 
-                    if not any(queue_names):
-                        raise Exception("No lanes found!")
+                if not self.queue_names:
+                    raise Exception("No lanes found!")
 
-                    cfg = SecretCFG()
-                    last_run_queue_name = cfg.last_run_queue_name
+                cfg = SecretCFG()
+                last_run_queue_name = cfg.last_run_queue_name
 
-                    for i, queue_name in enumerate(queue_names):
-                        button = Button(
-                            queue_name,
-                            classes="lane-button",
+                initial_index = self.queue_names.index(last_run_queue_name)
+
+                self.lane_list = ListView(
+                    *(
+                        ListItem(
+                            Label(queue_name),
                             id=f"lane-{i}",
                         )
+                        for i, queue_name in enumerate(self.queue_names)
+                    ),
+                    id="lanes",
+                    initial_index=initial_index,
+                )
 
-                        if queue_name == last_run_queue_name:
-                            self.current_index = i
-                            button.focus()
-
-                        self.lane_buttons.append(button)
-                        yield button
+                yield self.lane_list
 
                 # Container for docstring (side by side with lanes)
                 with Container(id="info-container"):
@@ -115,19 +114,23 @@ class DevDisplay(App):
 
             # Container for exit button at bottom right
             with Horizontal(id="navi-container"):
-                yield Button(
+                yield Button.success(
                     "\\[Enter] Run",
                     id="run",
                 )
 
-                yield Button(
+                yield Button.error(
                     "\\[Esc] Exit",
                     id="exit",
                 )
 
-        # Update docstring for initially focused button
-        if self.lane_buttons and self.current_index < len(self.lane_buttons):
-            self.update_info(self.lane_buttons[self.current_index].label)
+        # Update docstring for initially selected lane
+        if (
+            self.queue_names
+            and self.lane_list.index is not None
+            and self.lane_list.index < len(self.queue_names)
+        ):
+            self.update_info(self.queue_names[self.lane_list.index])
 
     def update_info(self, lane_name):
         """Update the docstring widget with the selected lane's docstring."""
@@ -221,28 +224,6 @@ class DevDisplay(App):
         except Exception:
             pass
 
-    def action_focus_next(self):
-        """Focus the next button in the list."""
-        if not self.lane_buttons:
-            return
-
-        max_len = len(self.lane_buttons)
-        self.current_index = (self.current_index + 1) % max_len
-        button = self.lane_buttons[self.current_index]
-        button.focus()
-        self.update_info(button.label)
-
-    def action_focus_previous(self):
-        """Focus the previous button in the list."""
-        if not self.lane_buttons:
-            return
-
-        max_len = len(self.lane_buttons)
-        self.current_index = (self.current_index - 1) % max_len
-        button = self.lane_buttons[self.current_index]
-        button.focus()
-        self.update_info(button.label)
-
     def action_exit_app(self):
         """Exit the application."""
         self.exit(None)
@@ -253,17 +234,19 @@ class DevDisplay(App):
 
     @on(Button.Pressed, "#run")
     def on_run(self):
-        self.exit(str(self.lane_buttons[self.current_index].label))
+        if self.lane_list.index is not None and self.lane_list.index < len(
+            self.queue_names
+        ):
+            self.exit(self.queue_names[self.lane_list.index])
 
-    @on(Button.Pressed, ".lane-button")
-    def lane_button_pressed(self, event: Button.Pressed):
-        if self.lane_buttons[self.current_index] != event.button:
-            self.current_index = self.lane_buttons.index(event.button)
+    @on(ListView.Selected)
+    def on_list_view_selected(self, event: ListView.Selected):
+        if event.list_view.id == "lanes" and event.list_view.index is not None:
+            if event.list_view.index < len(self.queue_names):
+                self.update_info(self.queue_names[event.list_view.index])
 
-            self.lane_buttons[self.current_index].focus()
-            self.update_info(
-                self.lane_buttons[self.current_index].label,
-            )
-            return
-
-        self.exit(str(event.button.label))
+    @on(ListView.Highlighted)
+    def on_list_view_highlighted(self, event: ListView.Highlighted):
+        if event.list_view.id == "lanes" and event.list_view.index is not None:
+            if event.list_view.index < len(self.queue_names):
+                self.update_info(self.queue_names[event.list_view.index])

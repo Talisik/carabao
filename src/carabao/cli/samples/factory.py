@@ -20,10 +20,6 @@ class Process3(Lane):
 
 
 class Factory(Lane):
-    """
-    A factory pattern implementation for lane processing.
-    """
-
     lanes = {
         1: Process1,
         2: Process2,
