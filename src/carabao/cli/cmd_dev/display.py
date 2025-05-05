@@ -6,7 +6,8 @@ from textual import on
 from textual.app import App
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Button, Label, ListItem, ListView
+from textual.widgets import Button, Label, ListItem, ListView, Tree
+from textual.widgets.tree import TreeNode
 
 from ...cfg.secret_cfg import SecretCFG
 
@@ -27,7 +28,6 @@ class Display(App):
         super().__init__()
         self.lanes = {}
         self.queue_names: List[str] = []
-        self.docstring_widget = None
 
     def compose(self):
         """Create and arrange widgets."""
@@ -105,12 +105,13 @@ class Display(App):
                         classes="info-label",
                     )
 
-                    self.sub_lanes_widget = Label(
-                        "",
-                        classes="info-widget",
-                    )
+                    # self.sub_lanes_widget = Label(
+                    #     "",
+                    #     classes="info-widget",
+                    # )
+                    self.sub_lanes_widget = Tree("")
 
-                    yield self.sub_lanes_widget
+                    # yield self.sub_lanes_widget
 
             # Container for exit button at bottom right
             with Horizontal(id="navi-container"):
@@ -136,25 +137,96 @@ class Display(App):
         """Update the docstring widget with the selected lane's docstring."""
         lane = self.lanes[lane_name]
 
-        if self.docstring_widget:
-            docstring = lane.__doc__ or "No documentation available."
-            docstring = docstring.replace("[", "\\[")
+        docstring = lane.__doc__ or "No documentation available."
+        docstring = docstring.replace("[", "\\[")
 
-            self.docstring_widget.update(docstring)
+        self.docstring_widget.update(docstring)
 
-        if self.name_widget:
-            self.name_widget.update(lane.__name__)
+        self.name_widget.update(lane.__name__)
 
-        if self.queue_names_widget:
-            self.queue_names_widget.update(", ".join(lane.name()))
+        self.queue_names_widget.update(", ".join(lane.name()))
 
-        if self.sub_lanes_widget:
-            # Build a tree representation of sub-lanes
-            self.sub_lanes_widget.update(
-                "\n".join(
-                    self._build_lane_tree(lane),
-                ),
+        self.sub_lanes_widget.show_root = False
+
+        # Build a tree representation of sub-lanes
+
+        self._build_lane_tree_2(
+            lane,
+            self.sub_lanes_widget.root,
+        )
+        # self.sub_lanes_widget.update(
+        #     "\n".join(
+        #         self._build_lane_tree(lane),
+        #     ),
+        # )
+
+    def _build_lane_tree_2(
+        self,
+        lane: type[Lane],
+        node: TreeNode,
+    ):
+        sub_lanes = lane.get_lanes()
+
+        if not sub_lanes:
+            return
+
+        items = sorted(
+            (
+                (
+                    "+" if priority_number >= 0 else "-",
+                    abs(priority_number),
+                    priority_number,
+                    sub_lane,
+                )
+                for priority_number, sub_lane in sub_lanes.items()
+                if sub_lane is not None
+            ),
+            key=lambda x: x[2],
+        )
+        equal_signs = all(v[0] == "+" for v in items) or all(v[0] == "-" for v in items)
+        offset = max(
+            map(
+                lambda x: len(str(x[1])),
+                items,
             )
+        )
+
+        for (
+            sign,
+            priority_number,
+            _,
+            sub_lane,
+        ) in items:
+            if sub_lane is None:
+                continue
+
+            is_str = isinstance(sub_lane, str)
+            text = sub_lane if is_str else sub_lane.__name__
+
+            if equal_signs:
+                sign = ""
+
+            priority_number_str = f"{sign}{priority_number:>0{offset}}"
+
+            text = f"[{priority_number_str}] {text}"
+            yield text
+
+            if not is_str:
+                sub_texts = [
+                    *self._build_lane_tree_2(
+                        sub_lane,
+                        node,
+                    )
+                ]
+
+                if sub_texts:
+                    sub_node = node.add(text)
+
+                    for sub_text in sub_texts:
+                        sub_node.add_leaf(sub_text)
+
+                else:
+                    node.add_leaf(text)
 
     def _build_lane_tree(
         self,
