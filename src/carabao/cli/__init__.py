@@ -198,8 +198,8 @@ def new(
         raise Exception("Lane directory not found!")
 
     display = cmd_new.Display()
-    display.lane_name = name
-    display.lane_directory = lane_directories[0]
+    display.default_lane_name = name
+    display.default_lane_directory = lane_directories[0]
 
     result: cmd_new.Item = display.run()  # type: ignore
 

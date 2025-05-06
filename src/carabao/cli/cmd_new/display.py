@@ -10,11 +10,8 @@ from carabao.cli.cmd_new.item import Item
 
 
 class Display(App):
-    lane_name: str = "MyLane"
-    lane_directory: str = "lanes"
-
-    DEFAULT_LANE_NAME = "MyLane"
-    DEFAULT_LANE_DIRECTORY = "lanes"
+    default_lane_name: str = "MyLane"
+    default_lane_directory: str = "lanes"
 
     BINDINGS = [
         Binding("escape", "exit_app", "Exit"),
@@ -90,19 +87,23 @@ class Display(App):
                             "Name",
                             classes="input-label",
                         )
+
                         self.name_input = Input(
-                            value=self.lane_name,
-                            placeholder=self.DEFAULT_LANE_NAME,
+                            value=self.default_lane_name,
+                            placeholder=self.default_lane_name,
+                            id="name-input",
                         )
+
                         yield self.name_input
 
                         yield Label(
                             "Directory",
                             classes="input-label",
                         )
+
                         self.directory_input = Input(
-                            value=self.lane_directory,
-                            placeholder=self.DEFAULT_LANE_DIRECTORY,
+                            value=self.default_lane_directory,
+                            placeholder=self.default_lane_directory,
                         )
 
                         yield self.directory_input
@@ -110,7 +111,10 @@ class Display(App):
                         with Horizontal(
                             classes="switch",
                         ):
-                            self.use_filename = Switch(True)
+                            self.use_filename = Switch(
+                                True,
+                                id="use-filename",
+                            )
                             yield self.use_filename
                             yield Label("Use Filename as Name?")
 
@@ -164,17 +168,19 @@ class Display(App):
         with open(template["file"], "r") as f:
             content = f.read()
 
+        lane_name = self.name_input.value or self.default_lane_name
+
         if not self.use_filename.value:
             content = content.replace(
                 "class Main(Lane):",
-                f"class {self.name_input.value}(Lane):",
+                f"class {lane_name}(Lane):",
             ).replace(
                 "use_filename: bool = True",
                 "use_filename: bool = False",
             )
 
         self.__item = Item(
-            lane_name=self.name_input.value,
+            lane_name=lane_name,
             lane_directory=self.directory_input.value,
             use_filename=self.use_filename.value,
             content=content,
@@ -203,9 +209,13 @@ class Display(App):
     def action_exit_app(self):
         self.exit(None)
 
-    @on(Input.Changed, "#name-input")
+    @on(Input.Changed)
     def on_name_input_changed(self, event: Input.Changed):
-        self.update_item(self.template_list.index or 0)
+        self.update(self.template_list.index or 0)
+
+    @on(Switch.Changed)
+    def on_use_filename_changed(self):
+        self.update(self.template_list.index or 0)
 
     @on(Button.Pressed, "#exit")
     def on_exit(self):
