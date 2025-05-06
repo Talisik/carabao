@@ -28,40 +28,46 @@ class Display(App):
     SAMPLES_FOLDERPATH = os.path.normpath(
         os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
-            "../samples",
+            "../sample",
         )
     )
-    TEMPLATES = {
-        "Basic Lane": {
-            "file": os.path.join(
-                SAMPLES_FOLDERPATH,
-                "basic.py",
-            ),
-            "description": "A simple lane that processes data sequentially.",
-        },
-        "Factory Lane": {
-            "file": os.path.join(
-                SAMPLES_FOLDERPATH,
-                "factory.py",
-            ),
-            "description": "A factory pattern implementation for lane processing.",
-        },
-        "Passive Lane": {
-            "file": os.path.join(
-                SAMPLES_FOLDERPATH,
-                "passive.py",
-            ),
-            "description": "A lane that runs in the background.",
-        },
-        "Subscriber Lane": {
-            "file": os.path.join(
-                SAMPLES_FOLDERPATH,
-                "subscriber.py",
-            ),
-            "description": "A lane that implements the publisher-subscriber pattern to receive events.",
-        },
-    }
-    TEMPLATE_NAMES = sorted(TEMPLATES.keys())
+    TEMPLATES = sorted(
+        [
+            {
+                "name": "Basic Lane",
+                "file": os.path.join(
+                    SAMPLES_FOLDERPATH,
+                    "basic.py",
+                ),
+                "description": "A simple lane that processes data sequentially.",
+            },
+            {
+                "name": "Factory Lane",
+                "file": os.path.join(
+                    SAMPLES_FOLDERPATH,
+                    "factory.py",
+                ),
+                "description": "A factory pattern implementation for lane processing.",
+            },
+            {
+                "name": "Passive Lane",
+                "file": os.path.join(
+                    SAMPLES_FOLDERPATH,
+                    "passive.py",
+                ),
+                "description": "A lane that runs in the background.",
+            },
+            {
+                "name": "Subscriber Lane",
+                "file": os.path.join(
+                    SAMPLES_FOLDERPATH,
+                    "subscriber.py",
+                ),
+                "description": "A lane that implements the publisher-subscriber pattern to receive events.",
+            },
+        ],
+        key=lambda x: x["name"],
+    )
 
     def compose(self):
         """Create and arrange widgets."""
@@ -70,10 +76,7 @@ class Display(App):
             with Horizontal():
                 # Create ListView with template names
                 self.template_list = ListView(
-                    *(
-                        ListItem(Label(template_name))
-                        for template_name in self.TEMPLATE_NAMES
-                    ),
+                    *(ListItem(Label(template["name"])) for template in self.TEMPLATES),
                     id="template-list",
                 )
 
@@ -149,27 +152,60 @@ class Display(App):
                     id="exit",
                 )
 
-        self.update_info(self.TEMPLATE_NAMES[0])
+        self.update(0)
 
-    def update_info(self, template_name):
-        """Update the info widgets with the selected template's information."""
-        template = self.TEMPLATES[template_name]
+    def update(self, index: int):
+        self.update_item(index)
+        self.update_info(index)
 
-        if self.description_widget:
-            self.description_widget.update(template["description"])
+    def update_item(self, index: int):
+        template = self.TEMPLATES[index]
 
-        if self.content_widget:
-            try:
-                with open(template["file"], "r") as f:
-                    content = f.read()
-                    # Escape brackets for Textual
-                    content = content.replace("[", "\\[").replace("]", "\\]")
-                    self.content_widget.update(content)
-            except Exception:
-                self.content_widget.update("Could not load template content.")
+        with open(template["file"], "r") as f:
+            content = f.read()
+
+        if not self.use_filename.value:
+            content = content.replace(
+                "class Main(Lane):",
+                f"class {self.name_input.value}(Lane):",
+            ).replace(
+                "use_filename: bool = True",
+                "use_filename: bool = False",
+            )
+
+        self.__item = Item(
+            lane_name=self.name_input.value,
+            lane_directory=self.directory_input.value,
+            use_filename=self.use_filename.value,
+            content=content,
+        )
+
+    def update_info(self, index: int):
+        template = self.TEMPLATES[index]
+
+        self.description_widget.update(template["description"])
+
+        try:
+            self.content_widget.update(
+                self.__item.content.replace(
+                    "[",
+                    "\\[",
+                ).replace(
+                    "]",
+                    "\\]",
+                )
+            )
+        except Exception:
+            self.content_widget.update(
+                "Could not load template content.",
+            )
 
     def action_exit_app(self):
         self.exit(None)
+
+    @on(Input.Changed, "#name-input")
+    def on_name_input_changed(self, event: Input.Changed):
+        self.update_item(self.template_list.index or 0)
 
     @on(Button.Pressed, "#exit")
     def on_exit(self):
@@ -177,17 +213,8 @@ class Display(App):
 
     @on(ListView.Highlighted, "#template-list")
     def on_template_selected(self, event: ListView.Selected):
-        self.current_index = event.list_view.index
-        template_name = event.item.children[0].render()
-        self.update_info(template_name)
+        self.update(event.list_view.index or 0)
 
     @on(Button.Pressed, "#select")
     def on_select(self):
-        self.exit(
-            Item(
-                template_name=self.TEMPLATE_NAMES[self.template_list.index or 0],
-                lane_name=self.name_input.value,
-                lane_directory=self.directory_input.value,
-                use_filename=self.use_filename.value,
-            )
-        )
+        self.exit(self.__item)

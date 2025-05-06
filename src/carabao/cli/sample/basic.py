@@ -1,7 +1,9 @@
 from l2l import Lane
 
 
-class LANE_NAME(Lane):
+class Main(Lane):
+    use_filename: bool = True
+
     @classmethod
     def primary(cls) -> bool:
         return True

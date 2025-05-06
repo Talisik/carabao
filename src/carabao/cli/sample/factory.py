@@ -19,7 +19,9 @@ class Process3(Lane):
         yield value
 
 
-class Factory(Lane):
+class Main(Lane):
+    use_filename: bool = True
+
     lanes = {
         1: Process1,
         2: Process2,

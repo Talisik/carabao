@@ -93,7 +93,7 @@ class NewStarterLane(Prompter.Component):
             with open(
                 os.path.join(
                     self["root_path"],
-                    "sample.basic.py",
+                    "sample/basic.py",
                 ),
                 "rb",
             ) as f2:

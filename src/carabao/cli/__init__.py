@@ -213,7 +213,6 @@ def new(
         result.lane_name,
     ).lower()
     class_name = "".join(word.capitalize() for word in filename.split("_"))
-    template_file = cmd_new.Display.TEMPLATES[result.template_name]["file"]
 
     for lane_directory in lane_directories:
         if not os.path.exists(lane_directory):
@@ -228,13 +227,7 @@ def new(
             continue
 
         with open(lane_filepath, "w") as f:
-            with open(template_file, "r") as f2:
-                f.write(
-                    f2.read().replace(
-                        "LANE_NAME",
-                        class_name,
-                    )
-                )
+            f.write(result.content)
 
         typer.echo(
             typer.style(

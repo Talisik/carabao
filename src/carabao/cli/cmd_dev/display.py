@@ -1,5 +1,4 @@
 import os
-from typing import List
 
 from l2l import Lane
 from textual import on
@@ -24,11 +23,6 @@ class Display(App):
 
     lane_list: ListView
 
-    def __init__(self):
-        super().__init__()
-        self.lanes = {}
-        self.queue_names: List[str] = []
-
     def compose(self):
         """Create and arrange widgets."""
         # Main layout container with horizontal arrangement
@@ -48,7 +42,10 @@ class Display(App):
                 cfg = SecretCFG()
                 last_run_queue_name = cfg.last_run_queue_name
 
-                initial_index = self.queue_names.index(last_run_queue_name)
+                try:
+                    initial_index = self.queue_names.index(last_run_queue_name)
+                except ValueError:
+                    initial_index = 0
 
                 self.lane_list = ListView(
                     *(
@@ -110,8 +107,9 @@ class Display(App):
                     #     classes="info-widget",
                     # )
                     self.sub_lanes_widget = Tree("")
+                    # self.sub_lanes_widget.show_root=False
 
-                    # yield self.sub_lanes_widget
+                    yield self.sub_lanes_widget
 
             # Container for exit button at bottom right
             with Horizontal(id="navi-container"):
@@ -146,21 +144,20 @@ class Display(App):
 
         self.queue_names_widget.update(", ".join(lane.name()))
 
-        self.sub_lanes_widget.show_root = False
+        # self.sub_lanes_widget.show_root = False
+        self.sub_lanes_widget.root.expand_all()
 
         # Build a tree representation of sub-lanes
 
-        self._build_lane_tree_2(
+        self.sub_lanes_widget.clear()
+
+        self.sub_lanes_widget.root.set_label(lane.__name__)
+        self.build_lane_tree(
             lane,
             self.sub_lanes_widget.root,
         )
-        # self.sub_lanes_widget.update(
-        #     "\n".join(
-        #         self._build_lane_tree(lane),
-        #     ),
-        # )
 
-    def _build_lane_tree_2(
+    def build_lane_tree(
         self,
         lane: type[Lane],
         node: TreeNode,
@@ -170,131 +167,31 @@ class Display(App):
         if not sub_lanes:
             return
 
-        items = sorted(
+        for priority_number, sub_lane in sorted(
             (
                 (
-                    "+" if priority_number >= 0 else "-",
-                    abs(priority_number),
                     priority_number,
                     sub_lane,
                 )
                 for priority_number, sub_lane in sub_lanes.items()
                 if sub_lane is not None
             ),
-            key=lambda x: x[2],
-        )
-        equal_signs = all(v[0] == "+" for v in items) or all(v[0] == "-" for v in items)
-        offset = max(
-            map(
-                lambda x: len(str(x[1])),
-                items,
-            )
-        )
-
-        for (
-            sign,
-            priority_number,
-            _,
-            sub_lane,
-        ) in items:
-            if sub_lane is None:
-                continue
-
+            key=lambda x: x[0],
+        ):
             is_str = isinstance(sub_lane, str)
             text = sub_lane if is_str else sub_lane.__name__
 
-            if equal_signs:
-                sign = ""
-
-            priority_number_str = f"{sign}{priority_number:>0{offset}}"
-
-            text = f"[{priority_number_str}] {text}"
-            yield text
+            sub_node = node.add(
+                f"{text} [dim]{priority_number}[/dim]",
+                expand=True,
+                allow_expand=False,
+            )
 
             if not is_str:
-                sub_texts = [
-                    *self._build_lane_tree_2(
-                        sub_lane,
-                        node,
-                    )
-                ]
-
-                if sub_texts:
-                    sub_node = node.add(text)
-
-                    for sub_text in sub_texts:
-                        sub_node.add_leaf(sub_text)
-
-                else:
-                    node.add_leaf(text)
-
-    def _build_lane_tree(
-        self,
-        lane_class: type[Lane],
-        indent: str = "",
-    ):
-        """Build a tree representation of the lane and its sub-lanes."""
-        # Try to get sub-lanes from the lane class
-        try:
-            # First attempt to access lanes directly or through lane inheritance
-            sub_lanes = lane_class.get_lanes()
-
-            if not sub_lanes:
-                return
-
-            items = sorted(
-                (
-                    (
-                        "+" if priority_number >= 0 else "-",
-                        abs(priority_number),
-                        priority_number,
-                        sub_lane,
-                    )
-                    for priority_number, sub_lane in sub_lanes.items()
-                    if sub_lane is not None
-                ),
-                key=lambda x: x[2],
-            )
-            equal_signs = all(v[0] == "+" for v in items) or all(
-                v[0] == "-" for v in items
-            )
-            offset = max(
-                map(
-                    lambda x: len(str(x[1])),
-                    items,
+                self.build_lane_tree(
+                    sub_lane,
+                    sub_node,
                 )
-            )
-
-            # Build the tree structure
-            for i, (
-                sign,
-                priority_number,
-                _,
-                sub_lane,
-            ) in enumerate(items):
-                if sub_lane is None:
-                    continue
-
-                last = i == len(items) - 1
-                prefix = "└─" if last else "├─"
-                is_str = isinstance(sub_lane, str)
-                text = sub_lane if is_str else sub_lane.__name__
-
-                if equal_signs:
-                    sign = ""
-
-                priority_number_str = f"{sign}{priority_number:>0{offset}}"
-
-                yield f"{indent}{prefix}\\[{priority_number_str}] {text}"
-
-                if not is_str:
-                    yield from self._build_lane_tree(
-                        sub_lane,
-                        indent + "  " if last else indent + "│ ",
-                    )
-
-        except Exception:
-            pass
 
     def action_exit_app(self):
         """Exit the application."""
