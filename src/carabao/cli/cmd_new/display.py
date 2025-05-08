@@ -14,7 +14,8 @@ class Display(App):
     default_lane_directory: str = "lanes"
 
     BINDINGS = [
-        Binding("escape", "exit_app", "Exit"),
+        Binding("escape", "exit_app", "Exit", priority=True),
+        Binding("enter", "run_lane", "Run", priority=True),
     ]
 
     CSS_PATH = os.path.join(
@@ -89,7 +90,6 @@ class Display(App):
                         )
 
                         self.name_input = Input(
-                            value=self.default_lane_name,
                             placeholder=self.default_lane_name,
                             id="name-input",
                         )
@@ -102,7 +102,6 @@ class Display(App):
                         )
 
                         self.directory_input = Input(
-                            value=self.default_lane_directory,
                             placeholder=self.default_lane_directory,
                         )
 
@@ -181,7 +180,7 @@ class Display(App):
 
         self.__item = Item(
             lane_name=lane_name,
-            lane_directory=self.directory_input.value,
+            lane_directory=self.directory_input.value or self.default_lane_directory,
             use_filename=self.use_filename.value,
             content=content,
         )
@@ -207,7 +206,10 @@ class Display(App):
             )
 
     def action_exit_app(self):
-        self.exit(None)
+        self.on_exit()
+
+    def action_run_lane(self):
+        self.on_select()
 
     @on(Input.Changed)
     def on_name_input_changed(self, event: Input.Changed):

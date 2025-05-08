@@ -1,5 +1,4 @@
 import os
-from typing import Type
 
 from l2l import Lane
 from textual import on
@@ -14,8 +13,8 @@ from ...cfg.secret_cfg import SecretCFG
 
 class Display(App):
     BINDINGS = [
-        Binding("escape", "exit_app", "Exit"),
-        Binding("enter", "run_lane", "Run"),
+        Binding("escape", "exit_app", "Exit", priority=True),
+        Binding("enter", "run_lane", "Run", priority=True),
     ]
 
     CSS_PATH = os.path.join(
@@ -161,7 +160,7 @@ class Display(App):
 
     def build_lane_tree(
         self,
-        lane: Type[Lane],
+        lane: type[Lane],
         node: TreeNode,
     ):
         sub_lanes = lane.get_lanes()
@@ -198,13 +197,10 @@ class Display(App):
     def action_exit_app(self):
         """Exit the application."""
         self.exit(None)
-        
+
     def action_run_lane(self):
         """Run the selected lane."""
-        if self.lane_list.index is not None and self.lane_list.index < len(
-            self.queue_names
-        ):
-            self.exit(self.queue_names[self.lane_list.index])
+        self.on_run()
 
     @on(Button.Pressed, "#exit")
     def on_exit(self):

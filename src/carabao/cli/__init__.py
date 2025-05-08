@@ -173,17 +173,15 @@ def new(
     ] = "",
 ):
     """
-    Create a new lane from a template.
+    Create a new lane with the given name.
 
-    Creates a new lane Python file using the provided name. The name will be
-    converted to snake_case for the filename and PascalCase for the class name.
-    If no name is provided, displays a UI to select a template type first.
+    This command guides the user through creating a new lane by:
+    1. Checking for valid lane directories from settings
+    2. Prompting for lane name and directory if not provided
+    3. Converting the lane name to appropriate filename and class name formats
+    4. Creating the lane file with template content
 
-    Args:
-        name: The name of the lane to create.
-
-    Raises:
-        Exception: If lane directories are not found or the lane already exists.
+    If no lane directories are configured, the command will display an error.
     """
     sys.path.insert(0, os.getcwd())
 
@@ -195,10 +193,15 @@ def new(
     ]
 
     if not lane_directories:
-        raise Exception("Lane directory not found!")
+        typer.secho(
+            "No lane directories found!",
+            fg=typer.colors.RED,
+        )
+        return
+        # raise Exception("Lane directory not found!")
 
     display = cmd_new.Display()
-    display.default_lane_name = name
+    display.default_lane_name = name.strip() or "MyLane"
     display.default_lane_directory = lane_directories[0]
 
     result: cmd_new.Item = display.run()  # type: ignore
@@ -237,4 +240,8 @@ def new(
         )
         return
 
-    raise Exception(f"Lane '{class_name}' already exists!")
+    typer.secho(
+        f"Lane '{class_name}' already exists!",
+        fg=typer.colors.RED,
+    )
+    # raise Exception(f"Lane '{class_name}' already exists!")
