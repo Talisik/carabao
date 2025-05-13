@@ -1,4 +1,5 @@
 import os
+from typing import Type
 
 from l2l import Lane
 from textual import on
@@ -160,7 +161,7 @@ class Display(App):
 
     def build_lane_tree(
         self,
-        lane: type[Lane],
+        lane: Type[Lane],
         node: TreeNode,
     ):
         sub_lanes = lane.get_lanes()
