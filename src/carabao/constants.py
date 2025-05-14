@@ -1,15 +1,34 @@
 import os
 import re
+from typing import Any, Callable, TypeVar
 
 from dotenv import load_dotenv
-from fun_things import lazy
+from fun_things import lazy, undefined
 from fun_things.environment import env
+
+T = TypeVar("T")
 
 
 @lazy
 class Constants:
     __env = False
     __dev_mode = False
+
+    def __call__(
+        self,
+        *keys,
+        cast: Callable[[Any], T] = str,
+        default: Any = undefined,
+        write_to_env=False,
+    ):
+        self.load_env()
+
+        return env(
+            *keys,
+            cast=cast,
+            default=default,
+            write_to_env=write_to_env,
+        )
 
     @classmethod
     def _dev_mode(cls, name: str):
