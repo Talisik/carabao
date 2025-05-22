@@ -9,4 +9,4 @@ class Main(Lane):
         return True
 
     def process(self, value):
-        pass
+        print("Hello World!")

@@ -63,6 +63,22 @@ class Display(App):
                 ),
                 "description": "A lane that implements the publisher-subscriber pattern to receive events.",
             },
+            {
+                "name": "Branching Lane",
+                "file": os.path.join(
+                    SAMPLES_FOLDERPATH,
+                    "branching.py",
+                ),
+                "description": "A lane that branches to multiple lanes based on the input.",
+            },
+            {
+                "name": "Batched Subscriber Lane",
+                "file": os.path.join(
+                    SAMPLES_FOLDERPATH,
+                    "batched_subscriber.py",
+                ),
+                "description": "A lane that processes data in batches.",
+            },
         ],
         key=lambda x: x["name"],
     )
