@@ -51,30 +51,27 @@ class Constants:
 
         cls.__env = True
 
-        template = "\033[{0}m{1}\033[0m\n"
+        template = "\033[{0}m{1}\033[0m"
         result = []
 
-        for filepath, color_code in {
-            ".env.development" if cls.__dev_mode else ".env.release": "43"
+        for filepath, template in {
+            ".env.development"
             if cls.__dev_mode
-            else "42",
-            ".env": "44",
+            else ".env.release": "\033[43;30m{0}\033[0m"
+            if cls.__dev_mode
+            else "\033[42;30m{0}\033[0m",
+            ".env": "\033[47;30m{0}\033[0m",
         }.items():
             if not os.path.exists(filepath):
                 continue
 
             load_dotenv(filepath)
 
-            result.append(
-                template.format(
-                    color_code,
-                    filepath,
-                )
-            )
+            result.append(template.format(filepath))
 
         print(
             "Environment:",
-            " + ".join(result),
+            " + ".join(result) + "\n",
         )
 
     def load_all_properties(self):
