@@ -6,8 +6,10 @@ from textual import on
 from textual.app import App
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Button, Label, ListItem, ListView, Tree
+from textual.widgets import Button, Label, ListItem, ListView, Markdown, Tree
 from textual.widgets.tree import TreeNode
+
+from carabao.utils import clean_docstring
 
 from ...cfg.secret_cfg import SecretCFG
 
@@ -92,7 +94,7 @@ class Display(App):
                         classes="info-label",
                     )
 
-                    self.docstring_widget = Label(
+                    self.docstring_widget = Markdown(
                         "",
                         id="docstring",
                         classes="info-widget",
@@ -134,19 +136,23 @@ class Display(App):
             self.update_info(self.queue_names[self.lane_list.index])
 
     def update_info(self, lane_name):
-        """Update the docstring widget with the selected lane's docstring."""
+        """
+        Update the docstring widget with the selected lane's docstring.
+        """
         lane = self.lanes[lane_name]
 
-        docstring = lane.__doc__ or "No documentation available."
-        docstring = docstring.replace("[", "\\[").strip()
-
-        self.docstring_widget.update(docstring)
+        self.docstring_widget.update(
+            clean_docstring(lane.__doc__)
+            if lane.__doc__
+            else "No documentation available."
+        )
 
         self.name_widget.update(lane.__name__)
 
         self.queue_names_widget.update(", ".join(lane.name()))
 
-        # self.sub_lanes_widget.show_root = False
+        self.sub_lanes_widget.root.allow_expand = False
+
         self.sub_lanes_widget.root.expand_all()
 
         # Build a tree representation of sub-lanes

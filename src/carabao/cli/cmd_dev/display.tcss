@@ -43,12 +43,14 @@ Button:focus {
 .info-widget {
     background: #24283b;
     color: #c0caf5;
-    height: auto;
     width: 100%;
     margin-bottom: 1;
-    padding: 1;
-    text-align: left;
-    text-style: italic;
+    padding: 1 4;
+}
+
+Tree {
+    padding: 1 2;
+    height: auto;
 }
 
 #navi-container {
