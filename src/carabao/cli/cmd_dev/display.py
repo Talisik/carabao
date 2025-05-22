@@ -9,9 +9,8 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import Button, Label, ListItem, ListView, Markdown, Tree
 from textual.widgets.tree import TreeNode
 
-from carabao.utils import clean_docstring
-
 from ...cfg.secret_cfg import SecretCFG
+from ...helpers.utils import clean_docstring
 
 
 class Display(App):

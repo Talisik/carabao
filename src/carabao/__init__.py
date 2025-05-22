@@ -1,5 +1,6 @@
 from .constants import C
 from .core import Core
+from .helpers.log import log
 from .lanes import LogToDB, NetworkHealth, PrettyEnv
 from .settings import Settings
 
@@ -49,4 +50,5 @@ __all__ = [
     "redis",
     "es",
     "pg",
+    "log",
 ]
