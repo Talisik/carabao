@@ -1,7 +1,6 @@
-import logging
 from typing import Type, Union, final
 
-from l2l import LOGGER, Lane
+from l2l import Lane
 from lazy_main import LazyMain
 
 from .constants import C
@@ -48,8 +47,6 @@ class Core:
 
     @classmethod
     def __start(cls):
-        LOGGER().setLevel(logging.DEBUG if C.TESTING else logging.INFO)
-
         settings = Settings.get()
         cls.__started = True
 
