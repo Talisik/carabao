@@ -81,6 +81,7 @@ class Core:
     @classmethod
     def __start(cls):
         settings = Settings.get()
+
         cls.__started = True
 
         cls.load_lanes(settings)
@@ -89,6 +90,8 @@ class Core:
 
         if C.QUEUE_NAME is None:
             raise MissingEnvError("QUEUE_NAME")
+
+        settings.before_start()
 
         main = LazyMain(
             main=Lane.start,

@@ -112,6 +112,10 @@ class Settings:
         raise ValueError(f"Invalid setting key: {key}")
 
     @classmethod
+    def before_start(cls) -> Any:
+        pass
+
+    @classmethod
     def error_handler(cls, e: Exception) -> Any:
         """
         Default error handler for exceptions raised during lane execution.
