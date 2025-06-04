@@ -6,7 +6,6 @@ import typer
 from typing_extensions import Annotated
 
 from ..cfg.secret_cfg import SecretCFG
-from ..constants import C
 from ..core import Core
 from ..helpers.prompter import Prompter
 from ..settings import Settings
@@ -41,12 +40,16 @@ def dev(
     sys.path.insert(0, os.getcwd())
 
     if name.strip() != "":
-        C._dev_mode(name)
-
-        Core.start()
+        Core.start(
+            name=name,
+            dev_mode=True,
+        )
         return
 
-    C._dev_mode("")
+    Core.initialize(
+        name=name,
+        dev_mode=True,
+    )
 
     Core.load_lanes(Settings.get())
 
@@ -68,22 +71,34 @@ def dev(
 
     # Run the program again.
 
-    C._dev_mode(name)
-
-    Core.start()
+    Core.start(
+        name=name,
+        dev_mode=True,
+    )
 
 
 @app.command(
     help="Run the pipeline in production mode.",
 )
-def run():
+def run(
+    name: Annotated[
+        str,
+        typer.Argument(
+            help="The name of the lane to run.",
+            is_eager=False,
+        ),
+    ] = "",
+):
     """
     Run the pipeline in production mode.
 
     This starts the Core with the default settings suitable for production.
     """
     sys.path.insert(0, os.getcwd())
-    Core.start()
+    Core.start(
+        name=name if name else None,
+        dev_mode=False,
+    )
 
 
 @app.command(

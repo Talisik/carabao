@@ -12,7 +12,6 @@ T = TypeVar("T")
 @lazy
 class Constants:
     __env = False
-    __dev_mode = False
 
     def __call__(
         self,
@@ -29,11 +28,6 @@ class Constants:
             default=default,
             write_to_env=write_to_env,
         )
-
-    @classmethod
-    def _dev_mode(cls, name: str):
-        cls.__dev_mode = True
-        cls.__dev_name = name
 
     @classmethod
     def load_env(cls):
@@ -54,11 +48,13 @@ class Constants:
         template = "\033[{0}m{1}\033[0m"
         result = []
 
+        from .core import Core
+
+        is_dev = Core.is_dev()
+
         for filepath, template in {
-            ".env.development"
-            if cls.__dev_mode
-            else ".env.release": "\033[43;30m{0}\033[0m"
-            if cls.__dev_mode
+            ".env.development" if is_dev else ".env.release": "\033[43;30m{0}\033[0m"
+            if is_dev
             else "\033[42;30m{0}\033[0m",
             ".env": "\033[47;30m{0}\033[0m",
         }.items():
@@ -197,7 +193,9 @@ class Constants:
         Returns:
             bool: True if in development mode, False otherwise.
         """
-        return self.__class__.__dev_mode
+        from .core import Core
+
+        return Core.is_dev()
 
     @property
     @lazy.fn
@@ -272,10 +270,12 @@ class Constants:
         Returns:
             str or None: The queue name or None if not specified.
         """
-        if self.__dev_mode:
-            return self.__dev_name
+        from .core import Core
 
-        self.load_env()
+        custom_name = Core.name()
+
+        if custom_name is not None:
+            return custom_name
 
         return env(
             "QUEUE_NAME",

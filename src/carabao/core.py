@@ -1,4 +1,4 @@
-from typing import Type, Union, final
+from typing import Optional, Type, Union, final
 
 from l2l import Lane
 from lazy_main import LazyMain
@@ -10,21 +10,54 @@ from .settings import Settings
 
 @final
 class Core:
-    in_development: bool = False
+    __name: Optional[str] = None
+    __dev_mode = False
     __started = False
 
     def __init__(self):
         raise Exception("This is not instantiable!")
 
     @classmethod
-    def start(cls):
+    def name(cls):
+        return cls.__name
+
+    @classmethod
+    def is_dev(cls):
+        return cls.__dev_mode
+
+    @classmethod
+    def initialize(
+        cls,
+        name: Optional[str] = None,
+        dev_mode: bool = False,
+    ):
+        if cls.__started:
+            return
+
+        cls.__name = name
+        cls.__dev_mode = dev_mode
+
+    @classmethod
+    def start(
+        cls,
+        name: Optional[str] = None,
+        dev_mode: bool = False,
+    ):
         """
         Starts the module.
 
         This module can only start once.
         """
+        cls.initialize(
+            name=name,
+            dev_mode=dev_mode,
+        )
+
         if cls.__started:
             return
+
+        cls.__name = name
+        cls.__dev_mode = dev_mode
 
         cls.__start()
 
