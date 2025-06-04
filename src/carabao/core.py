@@ -1,3 +1,4 @@
+import sys
 from typing import Optional, Type, Union, final
 
 from l2l import Lane
@@ -80,6 +81,14 @@ class Core:
 
     @classmethod
     def __start(cls):
+        try:
+            from loguru import logger
+
+            logger.remove()
+            logger.add(sys.stderr, level="INFO")
+        except Exception:
+            pass
+
         settings = Settings.get()
 
         cls.__started = True
