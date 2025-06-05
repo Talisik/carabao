@@ -12,6 +12,7 @@ from .settings import Settings
 @final
 class Core:
     __name: Optional[str] = None
+    __test_mode: Optional[bool] = None
     __dev_mode = False
     __started = False
 
@@ -27,22 +28,29 @@ class Core:
         return cls.__dev_mode
 
     @classmethod
+    def is_test(cls):
+        return cls.__test_mode
+
+    @classmethod
     def initialize(
         cls,
         name: Optional[str] = None,
         dev_mode: bool = False,
+        test_mode: Optional[bool] = None,
     ):
         if cls.__started:
             return
 
         cls.__name = name
         cls.__dev_mode = dev_mode
+        cls.__test_mode = test_mode
 
     @classmethod
     def start(
         cls,
         name: Optional[str] = None,
         dev_mode: bool = False,
+        test_mode: Optional[bool] = None,
     ):
         """
         Starts the module.
@@ -52,6 +60,7 @@ class Core:
         cls.initialize(
             name=name,
             dev_mode=dev_mode,
+            test_mode=test_mode,
         )
 
         if cls.__started:
@@ -59,6 +68,7 @@ class Core:
 
         cls.__name = name
         cls.__dev_mode = dev_mode
+        cls.__test_mode = test_mode
 
         cls.__start()
 
@@ -99,6 +109,20 @@ class Core:
 
         if C.QUEUE_NAME is None:
             raise MissingEnvError("QUEUE_NAME")
+
+        if C.IN_DEVELOPMENT:
+            print("\033[33m🛠️ Development\033[0m")
+
+        else:
+            print("\033[32m🚀 Production\033[0m")
+
+        if C.TESTING:
+            print("\033[34m🧪 Testing\033[0m")
+
+            if not C.IN_DEVELOPMENT:
+                print(
+                    "\033[31m🚨 You are testing in production! Did you do this intentionally?\033[0m"
+                )
 
         settings.before_start()
 

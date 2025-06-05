@@ -106,28 +106,3 @@ Input {
 Input:focus {
     border: tall #9ece6a;
 }
-
-Checkbox {
-    background: #2b5329;
-    color:rgb(192, 245, 214);
-    padding: 1 2;
-    border: none;
-}
-
-Checkbox:focus {
-    background: #3a7038;
-    color: #9ece6a;
-}
-
-Checkbox > .toggle {
-    background: #1e3b1d;
-    color: #9ece6a;
-}
-
-Checkbox.-on > .toggle {
-    background: #3a7038;
-}
-
-Checkbox.-on > .toggle--indicator {
-    color: #9ece6a;
-} 

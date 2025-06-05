@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+from typing import Optional
 
 import typer
 from typing_extensions import Annotated
@@ -35,8 +36,6 @@ def dev(
     Args:
         name: The name of the lane to run.
     """
-    print("\033[93m⚠️ Development Mode ⚠️\033[0m\n")
-
     sys.path.insert(0, os.getcwd())
 
     if name.strip() != "":
@@ -55,9 +54,9 @@ def dev(
 
     # Draw the display.
 
-    name = cmd_dev.Display().run()  # type: ignore
+    result = cmd_dev.Display().run()
 
-    if not name:
+    if result is None:
         return
 
     cfg = SecretCFG()
@@ -65,8 +64,15 @@ def dev(
     cfg.write(
         section=cfg.LAST_RUN,
         key=cfg.QUEUE_NAME,
-        value=name,
+        value=result.lane_name,
     )
+
+    cfg.write(
+        section=cfg.TEST_MODE,
+        key=cfg.TEST_MODE,
+        value=str(result.test_mode),
+    )
+
     cfg.save()
 
     # Run the program again.
@@ -74,6 +80,7 @@ def dev(
     Core.start(
         name=name,
         dev_mode=True,
+        test_mode=result.test_mode,
     )
 
 

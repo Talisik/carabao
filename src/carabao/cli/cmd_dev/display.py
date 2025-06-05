@@ -1,4 +1,5 @@
 import os
+from dataclasses import dataclass
 from typing import Type
 
 from l2l import Lane
@@ -6,14 +7,20 @@ from textual import on
 from textual.app import App
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Button, Label, ListItem, ListView, Markdown, Tree
+from textual.widgets import Button, Label, ListItem, ListView, Markdown, Switch, Tree
 from textual.widgets.tree import TreeNode
 
 from ...cfg.secret_cfg import SecretCFG
 from ...helpers.utils import clean_docstring
 
 
-class Display(App):
+@dataclass
+class Result:
+    lane_name: str
+    test_mode: bool
+
+
+class Display(App[Result]):
     BINDINGS = [
         Binding("escape", "exit_app", "Exit", priority=True),
         Binding("enter", "run_lane", "Run", priority=True),
@@ -25,6 +32,7 @@ class Display(App):
     )
 
     lane_list: ListView
+    default_test_mode: bool = False
 
     def compose(self):
         """Create and arrange widgets."""
@@ -120,6 +128,16 @@ class Display(App):
                     "\\[Enter] Run",
                     id="run",
                 )
+
+                with Horizontal(
+                    classes="switch",
+                ):
+                    self.test_mode = Switch(
+                        self.default_test_mode,
+                    )
+
+                    yield self.test_mode
+                    yield Label("Test Mode")
 
                 yield Button.error(
                     "\\[Esc] Exit",
@@ -217,7 +235,12 @@ class Display(App):
         if self.lane_list.index is not None and self.lane_list.index < len(
             self.queue_names
         ):
-            self.exit(self.queue_names[self.lane_list.index])
+            self.exit(
+                Result(
+                    lane_name=self.queue_names[self.lane_list.index],
+                    test_mode=self.test_mode.value,
+                ),
+            )
 
     @on(ListView.Selected)
     def on_list_view_selected(self, event: ListView.Selected):

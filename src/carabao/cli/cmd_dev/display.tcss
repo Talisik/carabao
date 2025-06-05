@@ -67,3 +67,26 @@ Tree {
     width: 20%;
     dock: right;
 }
+
+Switch {
+    width: auto;
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+
+.switch {
+    margin: 0 2;
+    width: auto;
+    height: auto;
+    padding: 1;
+}
+
+.switch > Label {
+    height: 100%;
+    margin-left: 2;
+}
+
+Switch > .switch--slider {
+    background: #3f3f3f;
+}

@@ -12,3 +12,12 @@ class CFG(BaseCFG):
             "settings",
             fallback="settings",
         )
+
+    @property
+    def form(self):
+        section = self.get_section("directories")
+
+        return section.get(
+            "form",
+            fallback="form",
+        )

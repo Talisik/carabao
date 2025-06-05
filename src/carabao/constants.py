@@ -233,6 +233,13 @@ class Constants:
         """
         self.load_env()
 
+        from .core import Core
+
+        is_test = Core.is_test()
+
+        if is_test is not None:
+            return is_test
+
         return (
             False
             if self.DEPLOY_SAFELY and self.IN_KUBERNETES
