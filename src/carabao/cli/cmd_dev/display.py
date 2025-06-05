@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import Any, Type
+from typing import Any, Callable, Dict, Tuple, Type
 
 from l2l import Lane
 from textual import on
@@ -30,6 +30,7 @@ from ...helpers.utils import _str2bool, clean_docstring
 
 @dataclass
 class Result:
+    lane: Type[Lane]
     name: str
     test_mode: bool
     form: dict[str, Any]
@@ -130,7 +131,7 @@ class Display(App[Result]):
             )
 
             yield self.test_mode
-            yield Label("Test Mode")
+            yield Label("🧪 Test Mode")
 
         yield Button.error(
             "\\[Esc] Exit",
@@ -138,12 +139,11 @@ class Display(App[Result]):
         )
 
     def __compose_form(self):
-        self.fields = {}
-
         with Container(id="form-container"):
             yield Label()
 
     def compose(self):
+        self.forms: Dict[str, Dict[str, Tuple[str, Callable]]] = {}
         self.lanes = {
             lane.first_name(): (
                 lane,
@@ -167,11 +167,11 @@ class Display(App[Result]):
                 yield from self.__compose_lane_list()
 
                 with TabbedContent():
-                    with TabPane("Form"):
-                        yield from self.__compose_form()
-
                     with TabPane("Info"):
                         yield from self.__compose_info()
+
+                    with TabPane("Form"):
+                        yield from self.__compose_form()
 
             with Horizontal(id="navi-container"):
                 yield from self.__compose_navi()
@@ -182,10 +182,10 @@ class Display(App[Result]):
             and self.lane_list.index < len(self.queue_names)
         ):
             lane_name = self.queue_names[self.lane_list.index]
-            self.update_info(lane_name)
-            self.update_form(lane_name)
+            self.__update_info(lane_name)
+            self.__update_form(lane_name)
 
-    def update_info(self, lane_name: str):
+    def __update_info(self, lane_name: str):
         """
         Update the docstring widget with the selected lane's docstring.
         """
@@ -199,7 +199,9 @@ class Display(App[Result]):
 
         self.name_widget.update(lane[0].__name__)
 
-        self.queue_names_widget.update(", ".join(lane[0].name()))
+        self.queue_names_widget.update(
+            ", ".join(lane[0].name()),
+        )
 
         self.sub_lanes_widget.root.allow_expand = False
 
@@ -209,13 +211,15 @@ class Display(App[Result]):
 
         self.sub_lanes_widget.clear()
 
-        self.sub_lanes_widget.root.set_label(lane[0].__name__)
+        self.sub_lanes_widget.root.set_label(
+            lane[0].__name__,
+        )
         self.build_lane_tree(
             lane[0],
             self.sub_lanes_widget.root,
         )
 
-    def update_form(
+    def __update_form(
         self,
         lane_name: str,
     ):
@@ -225,24 +229,75 @@ class Display(App[Result]):
         form_container = self.query_one("#form-container")
         form_container.remove_children()
 
-        form = SECRET_CFG.get_form(lane_name)
-
         fields = self.lanes[lane_name][1]
 
+        if not fields:
+            form_container.mount(
+                Label(
+                    "Not available. "
+                    "You can create one by adding a Form class inside your lane.",
+                ),
+            )
+
+            form_container.mount(
+                Markdown(
+                    """
+```py
+class MyLane(Lane):
+    class Form:
+        example_string: str = "Hello World!"
+        example_integer: int = 1
+        example_float: float = 1.2
+        example_boolean: bool = True
+
+    ...
+```
+                    """,
+                )
+            )
+            return
+
+        if lane_name not in self.forms:
+            form = SECRET_CFG.get_form(lane_name)
+            self.forms[lane_name] = {
+                field.name: (
+                    (
+                        form[field.name.lower()]
+                        if field.name.lower() in form
+                        else str(field.default),
+                        field.cast,
+                    )
+                )
+                for field in fields
+            }
+
         for field in fields:
-            value = form.get(field.name, str(field.default))
+            value, _ = self.forms[lane_name][field.name]
 
             form_container.mount(Label(field.name))
+
+            name = f"form-{lane_name}-{field.name}"
 
             if field.raw_cast is bool:
                 form_container.mount(
                     Switch(
                         _str2bool(value),
+                        name=name,
                         classes="form-switch",
                     )
                 )
             else:
-                form_container.mount(Input(value))
+                form_container.mount(
+                    Input(
+                        value,
+                        name=name,
+                        type="integer"
+                        if field.raw_cast is int
+                        else "number"
+                        if field.raw_cast is float
+                        else "text",
+                    )
+                )
 
     def build_lane_tree(
         self,
@@ -288,31 +343,52 @@ class Display(App[Result]):
         """Run the selected lane."""
         self.on_run()
 
+    @on(Switch.Changed)
+    def on_switch_changed(self, event: Switch.Changed):
+        name = event.switch.name
+
+        if name is None:
+            return
+
+        _, name, field = name.split("-")
+        _, cast = self.forms[name][field]
+        self.forms[name][field] = str(event.switch.value), cast
+
+    @on(Input.Changed)
+    def on_input_changed(self, event: Input.Changed):
+        name = event.input.name
+
+        if name is None:
+            return
+
+        _, name, field = name.split("-")
+        _, cast = self.forms[name][field]
+        self.forms[name][field] = event.input.value, cast
+
     @on(Button.Pressed, "#exit")
     def on_exit(self):
         self.exit(None)
 
     @on(Button.Pressed, "#run")
     def on_run(self):
-        if self.lane_list.index is not None and self.lane_list.index < len(
-            self.queue_names
-        ):
-            self.exit(
-                Result(
-                    name=self.queue_names[self.lane_list.index],
-                    test_mode=self.test_mode.value,
-                    form={
-                        name: field[1](field[0].value)
-                        for name, field in self.fields.items()
-                        if field[0].value is not None
-                    },
-                    raw_form={
-                        name: field[0].value
-                        for name, field in self.fields.items()
-                        if field[0].value is not None
-                    },
-                ),
-            )
+        if self.lane_list.index is None:
+            return
+
+        if self.lane_list.index >= len(self.queue_names):
+            return
+
+        name = self.queue_names[self.lane_list.index]
+        form = self.forms[name]
+
+        self.exit(
+            Result(
+                lane=self.lanes[name][0],
+                name=name,
+                test_mode=self.test_mode.value,
+                form={name: field[1](field[0]) for name, field in form.items()},
+                raw_form={name: field[0] for name, field in form.items()},
+            ),
+        )
 
     def __update(self, list_view: ListView):
         if list_view.id != "lanes":
@@ -325,8 +401,9 @@ class Display(App[Result]):
             return
 
         lane_name = self.queue_names[list_view.index]
-        self.update_info(lane_name)
-        self.update_form(lane_name)
+
+        self.__update_info(lane_name)
+        self.__update_form(lane_name)
 
     @on(ListView.Selected)
     def on_list_view_selected(self, event: ListView.Selected):

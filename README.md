@@ -43,6 +43,7 @@ A Python library for building robust publisher-subscriber (pub/sub) frameworks w
 -   Command-line interface for management, including interactive selection
 -   Support for multiple database connections (MongoDB, Redis, Elasticsearch, PostgreSQL)
 -   Development and production mode support
+-   Test mode for safe testing in production environments
 
 ## Installation
 
@@ -104,7 +105,7 @@ The framework prioritizes environment variables in the following order:
 2. Variables defined in the appropriate .env file
 3. Default values defined in settings
 
-This makes it easy to maintain different configurations for development and production environments without changing code.
+This makes it easy to maintain different configurations for development, testing, and production environments without changing code.
 
 ### Settings System
 
@@ -112,7 +113,7 @@ Carabao uses a centralized Settings system for configuration management. The Set
 
 #### Setting Up settings.py
 
-A typical settings.py file inherits from the base Settings class, following the approach shown in the sample settings file:
+A typical settings.py file inherits from the base Settings class:
 
 ```python
 from carabao import Settings as S
@@ -140,6 +141,9 @@ class Settings(S):
     # Number of parallel processes to use
     PROCESSES = 1
 
+    # Whether to deploy safely in production
+    DEPLOY_SAFELY = True
+
     # Custom error handler function
     @classmethod
     def error_handler(cls, error: Exception) -> None:
@@ -150,6 +154,14 @@ class Settings(S):
             error: The exception that was raised.
         """
         print(f"An error occurred: {error}")
+
+    @classmethod
+    def before_start(cls) -> None:
+        """
+        Hook method called before framework startup.
+        """
+        # Perform any necessary initialization
+        pass
 ```
 
 When you run `moo init`, this file is automatically created for you in the appropriate location.
@@ -183,6 +195,7 @@ When you run `moo init`, this file is automatically created for you in the appro
     - `EXIT_ON_FINISH`: Whether to exit after finishing processing
     - `EXIT_DELAY`: Delay before exiting
     - `PROCESSES`: Number of parallel processes to use
+    - `DEPLOY_SAFELY`: Whether to enforce production safety settings
 
     You can also define your own custom settings and access them the same way.
 
@@ -195,7 +208,7 @@ Carabao provides a command-line interface for managing lanes:
 
 ```sh
 # Run in production mode
-moo run
+moo run [queue_name]
 
 # Run in development mode
 moo dev [queue_name]
@@ -214,75 +227,6 @@ The development mode (`dev`) command:
 -   Provides navigation with arrow keys
 -   Allows selection with Enter key
 -   Exit option at the bottom
-
-## Built-in lanes
-
-Carabao comes with several built-in lanes that provide common functionality:
-
-### LogToDB
-
-A passive lane that logs exceptions to a MongoDB database.
-
-```python
-from carabao.lanes import LogToDB
-from pymongo import MongoClient
-
-# Configure MongoDB connection
-client = MongoClient("mongodb://localhost:27017/")
-db = client["my_database"]
-collection = db["error_logs"]
-
-# Configure LogToDB lane
-LogToDB.storage = collection
-LogToDB.label = "my_app"  # Optional, defaults to POD_NAME
-LogToDB.expiration_time = timedelta(days=7)  # Optional, defaults to 1 hour
-LogToDB.use_stacktrace = True  # Optional, defaults to True
-```
-
-Key features:
-
--   Automatically captures and logs exceptions to MongoDB
--   Configurable document expiration time
--   Options to use stack traces or simple error messages
--   Customizable document format
-
-### NetworkHealth
-
-Monitors network health by measuring ping times and stores the metrics in MongoDB.
-
-```python
-from carabao.lanes import NetworkHealth
-from pymongo import MongoClient
-
-# Configure MongoDB connection
-client = MongoClient("mongodb://localhost:27017/")
-db = client["my_database"]
-collection = db["network_health"]
-
-# Configure NetworkHealth lane
-NetworkHealth.storage = collection
-NetworkHealth.label = "api_service"  # Optional identifier
-```
-
-Key features:
-
--   Tracks network ping times
--   Stores metrics in a MongoDB collection
--   Updates records with timestamps for monitoring
-
-### PrettyEnv
-
-Displays environment variables in a formatted way to aid in debugging and configuration.
-
-```python
-# Automatically called if enabled. No configuration needed for PrettyEnv.
-```
-
-Key features:
-
--   Displays all accessed environment variables
--   Formatted for easy reading
--   Useful for debugging configuration issues
 
 ## Development
 

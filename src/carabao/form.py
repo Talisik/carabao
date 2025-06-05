@@ -94,6 +94,10 @@ class Form:
                 )
 
     @staticmethod
+    def get_form(lane: Type[Lane]):
+        return next(Form.get_forms_from_lane(lane), None)
+
+    @staticmethod
     def get_forms_from_lane(lane: Type[Lane]):
         """Get all Form classes defined within a Lane class.
 
@@ -108,8 +112,13 @@ class Form:
                 if not isinstance(inner_class, type):
                     continue
 
-                if inner_class.__name__ == "Form" or issubclass(inner_class, Form):
+                if inner_class.__name__.lower() == "form":
                     yield inner_class
+                    continue
+
+                if issubclass(inner_class, Form):
+                    yield inner_class
+                    continue
 
     @staticmethod
     def get_annotations(type: Type):

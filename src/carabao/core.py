@@ -11,6 +11,14 @@ from .settings import Settings
 
 @final
 class Core:
+    """
+    Core class for managing the Carabao framework lifecycle.
+
+    This class provides static methods for initializing, starting, and managing the framework.
+    It handles configuration loading, lane management, and runtime mode settings.
+    The class is marked as final to prevent inheritance.
+    """
+
     __name: Optional[str] = None
     __test_mode: Optional[bool] = None
     __dev_mode = False
@@ -21,14 +29,32 @@ class Core:
 
     @classmethod
     def name(cls):
+        """
+        Returns the name of the current instance.
+
+        Returns:
+            Optional[str]: The name of the instance if set, None otherwise.
+        """
         return cls.__name
 
     @classmethod
     def is_dev(cls):
+        """
+        Checks if the framework is running in development mode.
+
+        Returns:
+            bool: True if in development mode, False otherwise.
+        """
         return cls.__dev_mode
 
     @classmethod
     def is_test(cls):
+        """
+        Checks if the framework is running in test mode.
+
+        Returns:
+            Optional[bool]: True if in test mode, False if not, None if not set.
+        """
         return cls.__test_mode
 
     @classmethod
@@ -38,6 +64,16 @@ class Core:
         dev_mode: bool = False,
         test_mode: Optional[bool] = None,
     ):
+        """
+        Initializes the framework with the specified settings.
+
+        This method can only be called once. Subsequent calls will be ignored.
+
+        Args:
+            name: Optional name for the instance
+            dev_mode: Whether to run in development mode
+            test_mode: Whether to run in test mode
+        """
         if cls.__started:
             return
 
@@ -53,9 +89,15 @@ class Core:
         test_mode: Optional[bool] = None,
     ):
         """
-        Starts the module.
+        Starts the framework with the specified settings.
 
-        This module can only start once.
+        This method initializes the framework and begins execution of lanes.
+        It can only be called once. Subsequent calls will be ignored.
+
+        Args:
+            name: Optional name for the instance
+            dev_mode: Whether to run in development mode
+            test_mode: Whether to run in test mode
         """
         cls.initialize(
             name=name,
@@ -80,6 +122,9 @@ class Core:
         """
         Loads all Lane classes from the specified directories.
 
+        This method scans the configured directories for Lane classes and loads them
+        into the framework. The directories are specified in the settings object.
+
         Args:
             settings: The settings object containing the LANE_DIRECTORIES configuration.
         """
@@ -91,6 +136,21 @@ class Core:
 
     @classmethod
     def __start(cls):
+        """
+        Internal method that handles the actual framework startup process.
+
+        This method:
+        1. Configures logging
+        2. Loads settings
+        3. Loads lanes
+        4. Loads all properties
+        5. Validates required environment variables
+        6. Sets up the main execution loop
+        7. Handles cleanup of database connections
+
+        Raises:
+            MissingEnvError: If required environment variables are not set
+        """
         if not C.IN_DEVELOPMENT and not C.TESTING:
             try:
                 from loguru import logger

@@ -88,3 +88,7 @@ Input {
 .form-switch {
     margin: 1 3;
 }
+
+Switch > .switch--slider {
+    background: #3f3f3f;
+}

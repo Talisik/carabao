@@ -1,14 +1,8 @@
-Screen {
-    background: #2b5329;
-    color:rgb(169, 214, 184);
-}
-
 ListView {
     align: left top;
     margin: 0;
     margin-bottom: 1;
-    background: black 0%;
-    border: round #3a7038;
+    border: round;
     padding: 0;
     overflow: auto;
     overflow-x: hidden;
@@ -45,12 +39,9 @@ Switch {
 
 .info-label {
     text-style: bold;
-    color: #9ece6a;
 }
 
 .info-widget {
-    background: #1e3b1d;
-    color: #c0caf5;
     height: auto;
     width: 100%;
     margin-bottom: 1;
@@ -86,23 +77,19 @@ Switch {
     margin: 0;
     padding: 1;
     padding-bottom: 0;
-    border: round #3a7038;
+    border: round;
     height: auto;
 }
 
 .input-label {
     margin: 0;
     text-style: bold;
-    color: #9ece6a;
 }
 
 Input {
     margin-bottom: 1;
-    background: #1e3b1d;
-    border: tall #3a7038;
-    color: #c0caf5;
 }
 
-Input:focus {
-    border: tall #9ece6a;
+Switch > .switch--slider {
+    background: #3f3f3f;
 }
