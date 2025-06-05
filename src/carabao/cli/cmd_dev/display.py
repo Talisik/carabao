@@ -189,7 +189,7 @@ class Display(App[Result]):
         """
         Update the docstring widget with the selected lane's docstring.
         """
-        lane = self.lanes[lane_name]
+        lane = self.lanes[lane_name][0]
 
         self.docstring_widget.update(
             clean_docstring(lane.__doc__)
@@ -197,10 +197,10 @@ class Display(App[Result]):
             else "No documentation available."
         )
 
-        self.name_widget.update(lane[0].__name__)
+        self.name_widget.update(lane.__name__)
 
         self.queue_names_widget.update(
-            ", ".join(lane[0].name()),
+            ", ".join(lane.name()),
         )
 
         self.sub_lanes_widget.root.allow_expand = False
@@ -212,10 +212,10 @@ class Display(App[Result]):
         self.sub_lanes_widget.clear()
 
         self.sub_lanes_widget.root.set_label(
-            lane[0].__name__,
+            lane.__name__,
         )
         self.build_lane_tree(
-            lane[0],
+            lane,
             self.sub_lanes_widget.root,
         )
 
