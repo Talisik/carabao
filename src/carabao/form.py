@@ -3,17 +3,9 @@ from typing import Any, Callable, Generic, Set, Type, TypeVar, final
 
 from l2l import Lane
 
+from .helpers.utils import _str2bool
+
 T = TypeVar("T")
-
-
-def _str2bool(value: Any):
-    if isinstance(value, bool):
-        return value
-
-    if isinstance(value, str):
-        return value.lower() in ("true", "1", "yes", "on")
-
-    return bool(value)
 
 
 @dataclass(frozen=True)

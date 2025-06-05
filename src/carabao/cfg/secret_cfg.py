@@ -22,6 +22,11 @@ class SecretCFG(BaseCFG):
         return section.get(self.TEST_MODE) == "True"
 
     def get_form(self, lane_name: str):
-        return self.get_section(
-            f"{lane_name}{self.FORM}",
-        ).items()
+        return dict(
+            self.get_section(
+                f"{lane_name}{self.FORM}",
+            ).items()
+        )
+
+
+SECRET_CFG = SecretCFG()

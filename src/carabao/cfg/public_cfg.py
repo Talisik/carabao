@@ -1,7 +1,7 @@
 from .base_cfg import BaseCFG
 
 
-class CFG(BaseCFG):
+class PublicCFG(BaseCFG):
     filepath = "carabao.cfg"
 
     @property
@@ -21,3 +21,6 @@ class CFG(BaseCFG):
             "form",
             fallback="form",
         )
+
+
+PUBLIC_CFG = PublicCFG()

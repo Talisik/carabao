@@ -5,7 +5,7 @@ import sys
 import typer
 from typing_extensions import Annotated
 
-from ..cfg.secret_cfg import SecretCFG
+from ..cfg.secret_cfg import SECRET_CFG
 from ..core import Core
 from ..helpers.prompter import Prompter
 from ..settings import Settings
@@ -45,8 +45,7 @@ def dev(
     """
     sys.path.insert(0, os.getcwd())
 
-    cfg = SecretCFG()
-    cfg_test_mode = test_mode if test_mode is not None else cfg.test_mode
+    cfg_test_mode = test_mode if test_mode is not None else SECRET_CFG.test_mode
 
     if name.strip() != "":
         Core.start(
@@ -71,26 +70,26 @@ def dev(
     if result is None:
         return
 
-    cfg.write(
-        section=cfg.LAST_RUN,
-        key=cfg.QUEUE_NAME,
+    SECRET_CFG.write(
+        section=SECRET_CFG.LAST_RUN,
+        key=SECRET_CFG.QUEUE_NAME,
         value=result.name,
     )
 
-    cfg.write(
-        section=cfg.TEST_MODE,
-        key=cfg.TEST_MODE,
+    SECRET_CFG.write(
+        section=SECRET_CFG.TEST_MODE,
+        key=SECRET_CFG.TEST_MODE,
         value=str(result.test_mode),
     )
 
     for key, value in result.raw_form.items():
-        cfg.write(
-            section=f"{result.name}{cfg.FORM}",
+        SECRET_CFG.write(
+            section=f"{result.name}{SECRET_CFG.FORM}",
             key=key,
             value=str(value),
         )
 
-    cfg.save()
+    SECRET_CFG.save()
 
     # Run the program again.
 

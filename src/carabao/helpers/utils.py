@@ -20,3 +20,13 @@ def clean_docstring(text: str):
 
     except Exception:
         return text.strip()
+
+
+def _str2bool(value):
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, str):
+        return value.lower() in ("true", "1", "yes", "on")
+
+    return bool(value)

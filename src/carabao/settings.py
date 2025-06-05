@@ -4,7 +4,7 @@ from typing import Any, Iterable, Optional, final
 
 from fun_things import lazy
 
-from .cfg.cfg import CFG
+from .cfg.public_cfg import PUBLIC_CFG
 from .constants import C
 
 
@@ -145,7 +145,7 @@ class Settings:
         Returns:
             Type[Settings]: The user-defined Settings class or the base Settings class.
         """
-        settings_module = CFG().settings
+        settings_module = PUBLIC_CFG.settings
 
         try:
             # Try direct import

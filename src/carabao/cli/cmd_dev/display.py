@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import Any, Iterable, List, Type
+from typing import Any, Type
 
 from l2l import Lane
 from textual import on
@@ -22,10 +22,10 @@ from textual.widgets import (
 )
 from textual.widgets.tree import TreeNode
 
-from carabao.form import Form, _Field
+from carabao.form import Form
 
-from ...cfg.secret_cfg import SecretCFG
-from ...helpers.utils import clean_docstring
+from ...cfg.secret_cfg import SECRET_CFG
+from ...helpers.utils import _str2bool, clean_docstring
 
 
 @dataclass
@@ -49,12 +49,11 @@ class Display(App[Result]):
 
     lane_list: ListView
 
-    def __compose_lane_list(
-        self,
-        cfg: SecretCFG,
-    ):
+    def __compose_lane_list(self):
         try:
-            initial_index = self.queue_names.index(cfg.last_run_queue_name)
+            initial_index = self.queue_names.index(
+                SECRET_CFG.last_run_queue_name,
+            )
         except ValueError:
             initial_index = 0
 
@@ -117,7 +116,7 @@ class Display(App[Result]):
 
             yield self.sub_lanes_widget
 
-    def __compose_navi(self, cfg: SecretCFG):
+    def __compose_navi(self):
         yield Button.success(
             "\\[Enter] Run",
             id="run",
@@ -127,7 +126,7 @@ class Display(App[Result]):
             classes="switch",
         ):
             self.test_mode = Switch(
-                cfg.test_mode,
+                SECRET_CFG.test_mode,
             )
 
             yield self.test_mode
@@ -138,34 +137,13 @@ class Display(App[Result]):
             id="exit",
         )
 
-    def __compose_form(self, fields: Iterable[_Field]):
+    def __compose_form(self):
         self.fields = {}
 
         with Container(id="form-container"):
-            for field in fields:
-                yield Label(field.name)
-
-                if field.raw_cast is bool:
-                    switch = Switch(
-                        field.default,
-                        classes="form-switch",
-                    )
-
-                    self.fields[field.name] = (switch, field.cast)
-
-                    yield switch
-                else:
-                    input = Input(
-                        str(field.default) if field.default is not None else "",
-                    )
-
-                    self.fields[field.name] = (input, field.cast)
-
-                    yield input
+            yield Label()
 
     def compose(self):
-        cfg = SecretCFG()
-
         self.lanes = {
             lane.first_name(): (
                 lane,
@@ -186,21 +164,17 @@ class Display(App[Result]):
 
         with Vertical():
             with Horizontal():
-                yield from self.__compose_lane_list(
-                    cfg,
-                )
+                yield from self.__compose_lane_list()
 
                 with TabbedContent():
                     with TabPane("Form"):
-                        yield from self.__compose_form(
-                            self.lanes[cfg.last_run_queue_name][1]
-                        )
+                        yield from self.__compose_form()
 
                     with TabPane("Info"):
                         yield from self.__compose_info()
 
             with Horizontal(id="navi-container"):
-                yield from self.__compose_navi(cfg)
+                yield from self.__compose_navi()
 
         if (
             self.queue_names
@@ -211,7 +185,7 @@ class Display(App[Result]):
             self.update_info(lane_name)
             self.update_form(lane_name)
 
-    def update_info(self, lane_name):
+    def update_info(self, lane_name: str):
         """
         Update the docstring widget with the selected lane's docstring.
         """
@@ -241,31 +215,34 @@ class Display(App[Result]):
             self.sub_lanes_widget.root,
         )
 
-    def update_form(self, lane_name):
+    def update_form(
+        self,
+        lane_name: str,
+    ):
         """
         Update the form with the selected lane's fields.
         """
         form_container = self.query_one("#form-container")
         form_container.remove_children()
 
+        form = SECRET_CFG.get_form(lane_name)
+
         fields = self.lanes[lane_name][1]
 
         for field in fields:
+            value = form.get(field.name, str(field.default))
+
             form_container.mount(Label(field.name))
 
             if field.raw_cast is bool:
                 form_container.mount(
                     Switch(
-                        field.default,
+                        _str2bool(value),
                         classes="form-switch",
                     )
                 )
             else:
-                form_container.mount(
-                    Input(
-                        str(field.default) if field.default is not None else "",
-                    )
-                )
+                form_container.mount(Input(value))
 
     def build_lane_tree(
         self,
