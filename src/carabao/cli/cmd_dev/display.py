@@ -1,14 +1,28 @@
 import os
 from dataclasses import dataclass
-from typing import Type
+from typing import Any, Iterable, List, Type
 
 from l2l import Lane
 from textual import on
 from textual.app import App
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Button, Label, ListItem, ListView, Markdown, Switch, Tree
+from textual.widgets import (
+    Button,
+    Footer,
+    Input,
+    Label,
+    ListItem,
+    ListView,
+    Markdown,
+    Switch,
+    TabbedContent,
+    TabPane,
+    Tree,
+)
 from textual.widgets.tree import TreeNode
+
+from carabao.form import Form, _Field
 
 from ...cfg.secret_cfg import SecretCFG
 from ...helpers.utils import clean_docstring
@@ -16,8 +30,10 @@ from ...helpers.utils import clean_docstring
 
 @dataclass
 class Result:
-    lane_name: str
+    name: str
     test_mode: bool
+    form: dict[str, Any]
+    raw_form: dict[str, str]
 
 
 class Display(App[Result]):
@@ -32,125 +48,168 @@ class Display(App[Result]):
     )
 
     lane_list: ListView
-    default_test_mode: bool = False
+
+    def __compose_lane_list(
+        self,
+        cfg: SecretCFG,
+    ):
+        try:
+            initial_index = self.queue_names.index(cfg.last_run_queue_name)
+        except ValueError:
+            initial_index = 0
+
+        self.lane_list = ListView(
+            *(
+                ListItem(
+                    Label(queue_name),
+                    id=f"lane-{i}",
+                )
+                for i, queue_name in enumerate(self.queue_names)
+            ),
+            id="lanes",
+            initial_index=initial_index,
+        )
+
+        yield self.lane_list
+
+    def __compose_info(self):
+        with Container(id="info-container"):
+            yield Label(
+                "Name",
+                classes="info-label",
+            )
+
+            self.name_widget = Label(
+                "",
+                classes="info-widget",
+            )
+
+            yield self.name_widget
+            yield Label(
+                "Queue Names",
+                classes="info-label",
+            )
+
+            self.queue_names_widget = Label(
+                "",
+                classes="info-widget",
+            )
+
+            yield self.queue_names_widget
+            yield Label(
+                "Documentation",
+                classes="info-label",
+            )
+
+            self.docstring_widget = Markdown(
+                "",
+                id="docstring",
+                classes="info-widget",
+            )
+
+            yield self.docstring_widget
+            yield Label(
+                "Process Tree",
+                classes="info-label",
+            )
+
+            self.sub_lanes_widget = Tree("")
+
+            yield self.sub_lanes_widget
+
+    def __compose_navi(self, cfg: SecretCFG):
+        yield Button.success(
+            "\\[Enter] Run",
+            id="run",
+        )
+
+        with Horizontal(
+            classes="switch",
+        ):
+            self.test_mode = Switch(
+                cfg.test_mode,
+            )
+
+            yield self.test_mode
+            yield Label("Test Mode")
+
+        yield Button.error(
+            "\\[Esc] Exit",
+            id="exit",
+        )
+
+    def __compose_form(self, fields: Iterable[_Field]):
+        self.fields = {}
+
+        with Container(id="form-container"):
+            for field in fields:
+                yield Label(field.name)
+
+                if field.raw_cast is bool:
+                    switch = Switch(
+                        field.default,
+                        classes="form-switch",
+                    )
+
+                    self.fields[field.name] = (switch, field.cast)
+
+                    yield switch
+                else:
+                    input = Input(
+                        str(field.default) if field.default is not None else "",
+                    )
+
+                    self.fields[field.name] = (input, field.cast)
+
+                    yield input
 
     def compose(self):
-        """Create and arrange widgets."""
-        # Main layout container with horizontal arrangement
+        cfg = SecretCFG()
+
+        self.lanes = {
+            lane.first_name(): (
+                lane,
+                sorted(
+                    Form.get_fields(lane),
+                    key=lambda field: field.name,
+                ),
+            )
+            for lane in Lane.available_lanes()
+            if lane.primary() and not lane.passive()
+        }
+        self.queue_names = sorted(self.lanes.keys())
+
+        if not self.queue_names:
+            raise Exception("No lanes found!")
+
+        yield Footer()
+
         with Vertical():
             with Horizontal():
-                # ListView for lanes
-                self.lanes = {
-                    lane.first_name(): lane
-                    for lane in Lane.available_lanes()
-                    if lane.primary() and not lane.passive()
-                }
-                self.queue_names = sorted(self.lanes.keys())
+                yield from self.__compose_lane_list(
+                    cfg,
+                )
 
-                if not self.queue_names:
-                    raise Exception("No lanes found!")
-
-                cfg = SecretCFG()
-                last_run_queue_name = cfg.last_run_queue_name
-
-                try:
-                    initial_index = self.queue_names.index(last_run_queue_name)
-                except ValueError:
-                    initial_index = 0
-
-                self.lane_list = ListView(
-                    *(
-                        ListItem(
-                            Label(queue_name),
-                            id=f"lane-{i}",
+                with TabbedContent():
+                    with TabPane("Form"):
+                        yield from self.__compose_form(
+                            self.lanes[cfg.last_run_queue_name][1]
                         )
-                        for i, queue_name in enumerate(self.queue_names)
-                    ),
-                    id="lanes",
-                    initial_index=initial_index,
-                )
 
-                yield self.lane_list
+                    with TabPane("Info"):
+                        yield from self.__compose_info()
 
-                # Container for docstring (side by side with lanes)
-                with Container(id="info-container"):
-                    yield Label(
-                        "Name",
-                        classes="info-label",
-                    )
-
-                    self.name_widget = Label(
-                        "",
-                        classes="info-widget",
-                    )
-
-                    yield self.name_widget
-                    yield Label(
-                        "Queue Names",
-                        classes="info-label",
-                    )
-
-                    self.queue_names_widget = Label(
-                        "",
-                        classes="info-widget",
-                    )
-
-                    yield self.queue_names_widget
-                    yield Label(
-                        "Documentation",
-                        classes="info-label",
-                    )
-
-                    self.docstring_widget = Markdown(
-                        "",
-                        id="docstring",
-                        classes="info-widget",
-                    )
-
-                    yield self.docstring_widget
-                    yield Label(
-                        "Process Tree",
-                        classes="info-label",
-                    )
-
-                    # self.sub_lanes_widget = Label(
-                    #     "",
-                    #     classes="info-widget",
-                    # )
-                    self.sub_lanes_widget = Tree("")
-                    # self.sub_lanes_widget.show_root=False
-
-                    yield self.sub_lanes_widget
-
-            # Container for exit button at bottom right
             with Horizontal(id="navi-container"):
-                yield Button.success(
-                    "\\[Enter] Run",
-                    id="run",
-                )
+                yield from self.__compose_navi(cfg)
 
-                with Horizontal(
-                    classes="switch",
-                ):
-                    self.test_mode = Switch(
-                        self.default_test_mode,
-                    )
-
-                    yield self.test_mode
-                    yield Label("Test Mode")
-
-                yield Button.error(
-                    "\\[Esc] Exit",
-                    id="exit",
-                )
-
-        # Update docstring for initially selected lane
         if (
             self.queue_names
             and self.lane_list.index is not None
             and self.lane_list.index < len(self.queue_names)
         ):
-            self.update_info(self.queue_names[self.lane_list.index])
+            lane_name = self.queue_names[self.lane_list.index]
+            self.update_info(lane_name)
+            self.update_form(lane_name)
 
     def update_info(self, lane_name):
         """
@@ -164,9 +223,9 @@ class Display(App[Result]):
             else "No documentation available."
         )
 
-        self.name_widget.update(lane.__name__)
+        self.name_widget.update(lane[0].__name__)
 
-        self.queue_names_widget.update(", ".join(lane.name()))
+        self.queue_names_widget.update(", ".join(lane[0].name()))
 
         self.sub_lanes_widget.root.allow_expand = False
 
@@ -176,11 +235,37 @@ class Display(App[Result]):
 
         self.sub_lanes_widget.clear()
 
-        self.sub_lanes_widget.root.set_label(lane.__name__)
+        self.sub_lanes_widget.root.set_label(lane[0].__name__)
         self.build_lane_tree(
-            lane,
+            lane[0],
             self.sub_lanes_widget.root,
         )
+
+    def update_form(self, lane_name):
+        """
+        Update the form with the selected lane's fields.
+        """
+        form_container = self.query_one("#form-container")
+        form_container.remove_children()
+
+        fields = self.lanes[lane_name][1]
+
+        for field in fields:
+            form_container.mount(Label(field.name))
+
+            if field.raw_cast is bool:
+                form_container.mount(
+                    Switch(
+                        field.default,
+                        classes="form-switch",
+                    )
+                )
+            else:
+                form_container.mount(
+                    Input(
+                        str(field.default) if field.default is not None else "",
+                    )
+                )
 
     def build_lane_tree(
         self,
@@ -237,19 +322,39 @@ class Display(App[Result]):
         ):
             self.exit(
                 Result(
-                    lane_name=self.queue_names[self.lane_list.index],
+                    name=self.queue_names[self.lane_list.index],
                     test_mode=self.test_mode.value,
+                    form={
+                        name: field[1](field[0].value)
+                        for name, field in self.fields.items()
+                        if field[0].value is not None
+                    },
+                    raw_form={
+                        name: field[0].value
+                        for name, field in self.fields.items()
+                        if field[0].value is not None
+                    },
                 ),
             )
 
+    def __update(self, list_view: ListView):
+        if list_view.id != "lanes":
+            return
+
+        if list_view.index is None:
+            return
+
+        if list_view.index >= len(self.queue_names):
+            return
+
+        lane_name = self.queue_names[list_view.index]
+        self.update_info(lane_name)
+        self.update_form(lane_name)
+
     @on(ListView.Selected)
     def on_list_view_selected(self, event: ListView.Selected):
-        if event.list_view.id == "lanes" and event.list_view.index is not None:
-            if event.list_view.index < len(self.queue_names):
-                self.update_info(self.queue_names[event.list_view.index])
+        self.__update(event.list_view)
 
     @on(ListView.Highlighted)
     def on_list_view_highlighted(self, event: ListView.Highlighted):
-        if event.list_view.id == "lanes" and event.list_view.index is not None:
-            if event.list_view.index < len(self.queue_names):
-                self.update_info(self.queue_names[event.list_view.index])
+        self.__update(event.list_view)

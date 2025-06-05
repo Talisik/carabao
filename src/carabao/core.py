@@ -91,13 +91,14 @@ class Core:
 
     @classmethod
     def __start(cls):
-        try:
-            from loguru import logger
+        if not C.IN_DEVELOPMENT and not C.TESTING:
+            try:
+                from loguru import logger
 
-            logger.remove()
-            logger.add(sys.stderr, level="INFO")
-        except Exception:
-            pass
+                logger.remove()
+                logger.add(sys.stderr, level="INFO")
+            except Exception:
+                pass
 
         settings = Settings.get()
 
@@ -111,18 +112,20 @@ class Core:
             raise MissingEnvError("QUEUE_NAME")
 
         if C.IN_DEVELOPMENT:
-            print("\033[33m🛠️ Development\033[0m")
+            print("\033[33m🛠️ Running in development mode.\033[0m")
 
         else:
-            print("\033[32m🚀 Production\033[0m")
+            print("\033[32m🚀 Running in production mode.\033[0m")
 
         if C.TESTING:
-            print("\033[34m🧪 Testing\033[0m")
+            print("\033[34m🧪 Running in testing mode.\033[0m")
 
             if not C.IN_DEVELOPMENT:
                 print(
                     "\033[31m🚨 You are testing in production! Did you do this intentionally?\033[0m"
                 )
+
+        print()
 
         settings.before_start()
 

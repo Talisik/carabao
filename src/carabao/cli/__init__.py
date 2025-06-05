@@ -1,7 +1,6 @@
 import os
 import re
 import sys
-from typing import Optional
 
 import typer
 from typing_extensions import Annotated
@@ -26,6 +25,14 @@ def dev(
             is_eager=False,
         ),
     ] = "",
+    test_mode: Annotated[
+        bool,
+        typer.Option(
+            "--test-mode",
+            "-t",
+            help="Run the pipeline in testing mode.",
+        ),
+    ] = None,  # type: ignore
 ):
     """
     Run the pipeline in development mode.
@@ -38,16 +45,21 @@ def dev(
     """
     sys.path.insert(0, os.getcwd())
 
+    cfg = SecretCFG()
+    cfg_test_mode = test_mode if test_mode is not None else cfg.test_mode
+
     if name.strip() != "":
         Core.start(
             name=name,
             dev_mode=True,
+            test_mode=cfg_test_mode,
         )
         return
 
     Core.initialize(
         name=name,
         dev_mode=True,
+        test_mode=cfg_test_mode,
     )
 
     Core.load_lanes(Settings.get())
@@ -59,12 +71,10 @@ def dev(
     if result is None:
         return
 
-    cfg = SecretCFG()
-
     cfg.write(
         section=cfg.LAST_RUN,
         key=cfg.QUEUE_NAME,
-        value=result.lane_name,
+        value=result.name,
     )
 
     cfg.write(
@@ -73,12 +83,19 @@ def dev(
         value=str(result.test_mode),
     )
 
+    for key, value in result.raw_form.items():
+        cfg.write(
+            section=f"{result.name}{cfg.FORM}",
+            key=key,
+            value=str(value),
+        )
+
     cfg.save()
 
     # Run the program again.
 
     Core.start(
-        name=name,
+        name=result.name,
         dev_mode=True,
         test_mode=result.test_mode,
     )

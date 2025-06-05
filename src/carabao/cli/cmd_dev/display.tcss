@@ -1,8 +1,3 @@
-Screen {
-    background: #1a1b26;
-    color: #a9b1d6;
-}
-
 Horizontal {
     height: auto;
     padding: 0;
@@ -13,8 +8,7 @@ ListView {
     align: left top;
     margin: 0;
     margin-bottom: 1;
-    background: black 0%;
-    border: round #565f89;
+    border: round;
     padding: 0;
     overflow: auto;
     overflow-x: hidden;
@@ -30,9 +24,6 @@ Button:focus {
 }
 
 #info-container {
-    margin: 1;
-    margin-top: 0;
-    padding: 1;
     overflow: auto;
 }
 
@@ -41,8 +32,6 @@ Button:focus {
 }
 
 .info-widget {
-    background: #24283b;
-    color: #c0caf5;
     width: 100%;
     margin-bottom: 1;
     padding: 1 4;
@@ -72,7 +61,6 @@ Switch {
     width: auto;
     padding: 0;
     border: none;
-    background: transparent;
 }
 
 .switch {
@@ -87,6 +75,16 @@ Switch {
     margin-left: 2;
 }
 
-Switch > .switch--slider {
-    background: #3f3f3f;
+TabPane {
+    width: 70%;
+    padding: 1 2;
+}
+
+Input {
+    margin-left: 2;
+    margin-bottom: 1;
+}
+
+.form-switch {
+    margin: 1 3;
 }

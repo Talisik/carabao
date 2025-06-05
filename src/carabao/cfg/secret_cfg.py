@@ -5,6 +5,7 @@ class SecretCFG(BaseCFG):
     LAST_RUN = "last_run"
     QUEUE_NAME = "queue_name"
     TEST_MODE = "test_mode"
+    FORM = "_form"
 
     filepath = ".ignore.carabao.cfg"
 
@@ -18,4 +19,9 @@ class SecretCFG(BaseCFG):
     def test_mode(self):
         section = self.get_section(self.TEST_MODE)
 
-        return section.get(self.TEST_MODE)
+        return section.get(self.TEST_MODE) == "True"
+
+    def get_form(self, lane_name: str):
+        return self.get_section(
+            f"{lane_name}{self.FORM}",
+        ).items()
