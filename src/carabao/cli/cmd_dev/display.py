@@ -22,7 +22,7 @@ from textual.widgets import (
 )
 from textual.widgets.tree import TreeNode
 
-from carabao.form import Form
+from carabao import form
 
 from ...cfg.secret_cfg import SECRET_CFG
 from ...helpers.utils import _str2bool, clean_docstring
@@ -148,7 +148,7 @@ class Display(App[Result]):
             lane.first_name(): (
                 lane,
                 sorted(
-                    Form.get_fields(lane),
+                    form._get_fields(lane),
                     key=lambda field: field.name,
                 ),
             )
@@ -258,12 +258,12 @@ class MyLane(Lane):
             return
 
         if lane_name not in self.forms:
-            form = SECRET_CFG.get_form(lane_name)
+            _form = SECRET_CFG.get_form(lane_name)
             self.forms[lane_name] = {
                 field.name: (
                     (
-                        form[field.name.lower()]
-                        if field.name.lower() in form
+                        _form[field.name.lower()]
+                        if field.name.lower() in _form
                         else str(field.default),
                         field.cast,
                     )
@@ -378,15 +378,15 @@ class MyLane(Lane):
             return
 
         name = self.queue_names[self.lane_list.index]
-        form = self.forms[name]
+        _form = self.forms[name]
 
         self.exit(
             Result(
                 lane=self.lanes[name][0],
                 name=name,
                 test_mode=self.test_mode.value,
-                form={name: field[1](field[0]) for name, field in form.items()},
-                raw_form={name: field[0] for name, field in form.items()},
+                form={name: field[1](field[0]) for name, field in _form.items()},
+                raw_form={name: field[0] for name, field in _form.items()},
             ),
         )
 

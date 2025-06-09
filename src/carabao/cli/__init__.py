@@ -5,7 +5,7 @@ import sys
 import typer
 from typing_extensions import Annotated
 
-from carabao.form import Form
+from carabao import form
 
 from ..cfg.secret_cfg import SECRET_CFG
 from ..core import Core
@@ -93,11 +93,12 @@ def dev(
 
     SECRET_CFG.save()
 
-    form = Form.get_form(result.lane)
+    _form = form._get_form(result.lane)
 
-    if form is not None:
+    if _form is not None:
         for key, value in result.form.items():
-            setattr(form, key, value)
+            setattr(_form, key, value)
+            setattr(form.F, key, value)
 
     # Run the program again.
 
