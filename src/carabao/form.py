@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, Set, Type, TypeVar
+from typing import Any, Callable, Generic, Optional, Set, Type, TypeVar
 
 from l2l import Lane
 
@@ -23,13 +23,17 @@ class _Field(Generic[T]):
     default: Any
     cast: Callable[[Any], T]
     raw_cast: Any
-    name: str = None  # type: ignore
+    name: str
+    min_value: int
+    max_value: int
 
 
 def _make_field(
     name: str,
     default: Any,
     cast: Callable[[Any], T],
+    min_value: Optional[int],
+    max_value: Optional[int],
 ):
     """
     Create a new field instance with the given parameters.
@@ -52,6 +56,8 @@ def _make_field(
         default=default,
         cast=cast,
         raw_cast=raw_cast,
+        min_value=min_value,  # type: ignore
+        max_value=max_value,  # type: ignore
     )
 
 
@@ -59,6 +65,8 @@ def Field(
     default: Any = None,
     cast: Callable[[str], T] = str,
     name: str = None,  # type: ignore
+    min_value: int = None,  # type: ignore
+    max_value: int = None,  # type: ignore
 ) -> T:
     """
     Create a field for use in a Form class.
@@ -107,6 +115,8 @@ def _get_fields(lane: Type[Lane]):
                     name=name,
                     default=value,
                     cast=annotations[name],
+                    min_value=None,
+                    max_value=None,
                 )
 
             else:
@@ -114,6 +124,8 @@ def _get_fields(lane: Type[Lane]):
                     name=name,
                     default=value,
                     cast=str,
+                    min_value=None,
+                    max_value=None,
                 )
 
         for name, cast in annotations.items():
@@ -126,6 +138,8 @@ def _get_fields(lane: Type[Lane]):
                 name=name,
                 default=None,
                 cast=cast,
+                min_value=None,
+                max_value=None,
             )
 
 

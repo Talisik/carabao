@@ -175,14 +175,14 @@ class Core:
             print("\033[33m🛠️ Running in development mode.\033[0m")
 
         else:
-            print("\033[32m🚀 Running in production mode.\033[0m")
+            print("\033[32m🚀 Running in release mode.\033[0m")
 
         if C.TESTING:
             print("\033[34m🧪 Running in testing mode.\033[0m")
 
             if not C.IN_DEVELOPMENT:
                 print(
-                    "\033[31m🚨 You are testing in production! Did you do this intentionally?\033[0m"
+                    "\033[31m🚨 You are testing in release mode! Did you do this intentionally?\033[0m"
                 )
 
         print()

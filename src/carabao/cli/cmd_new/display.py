@@ -79,6 +79,14 @@ class Display(App):
                 ),
                 "description": "A lane that processes data in batches.",
             },
+            {
+                "name": "Lane with Form",
+                "file": os.path.join(
+                    SAMPLES_FOLDERPATH,
+                    "form.py",
+                ),
+                "description": "A lane that has a form.",
+            },
         ],
         key=lambda x: x["name"],
     )
@@ -207,14 +215,16 @@ class Display(App):
         self.description_widget.update(template["description"])
 
         try:
+            content = self.__item.content.replace(
+                "[",
+                "\\[",
+            ).replace(
+                "]",
+                "\\]",
+            )
+
             self.content_widget.update(
-                self.__item.content.replace(
-                    "[",
-                    "\\[",
-                ).replace(
-                    "]",
-                    "\\]",
-                )
+                f"```py\n{content}\n```",
             )
         except Exception:
             self.content_widget.update(

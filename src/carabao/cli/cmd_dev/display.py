@@ -21,6 +21,7 @@ from textual.widgets import (
     Tree,
 )
 from textual.widgets.tree import TreeNode
+from textual_slider import Slider
 
 from carabao import form
 
@@ -286,6 +287,17 @@ class MyLane(Lane):
                         classes="form-switch",
                     )
                 )
+
+            elif field.min_value is not None and field.max_value is not None:
+                form_container.mount(
+                    Slider(
+                        value=int(value) if value is not None else None,
+                        name=name,
+                        min=field.min_value,
+                        max=field.max_value,
+                    )
+                )
+
             else:
                 form_container.mount(
                     Input(
@@ -364,6 +376,17 @@ class MyLane(Lane):
         _, name, field = name.split("-")
         _, cast = self.forms[name][field]
         self.forms[name][field] = event.input.value, cast
+
+    @on(Slider.Changed)
+    def on_slider_changed(self, event: Slider.Changed):
+        name = event.slider.name
+
+        if name is None:
+            return
+
+        _, name, field = name.split("-")
+        _, cast = self.forms[name][field]
+        self.forms[name][field] = str(event.slider.value), cast
 
     @on(Button.Pressed, "#exit")
     def on_exit(self):
