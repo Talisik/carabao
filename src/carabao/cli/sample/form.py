@@ -13,6 +13,7 @@ class Main(Lane):
             cast=int,
             min_value=0,
             max_value=10,
+            step=2,
         )
 
     use_filename: bool = True

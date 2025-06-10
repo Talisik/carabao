@@ -4,7 +4,16 @@ from textual import on
 from textual.app import App
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Button, Footer, Input, Label, ListItem, ListView, Switch
+from textual.widgets import (
+    Button,
+    Footer,
+    Input,
+    Label,
+    ListItem,
+    ListView,
+    Markdown,
+    Switch,
+)
 
 from carabao.cli.cmd_new.item import Item
 
@@ -159,7 +168,7 @@ class Display(App):
                             classes="info-label",
                         )
 
-                        self.content_widget = Label(
+                        self.content_widget = Markdown(
                             "",
                             id="content",
                             classes="info-widget",

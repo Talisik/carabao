@@ -16,7 +16,6 @@ from textual.widgets import (
     ListItem,
     ListView,
     Markdown,
-    Static,
     Switch,
     TabbedContent,
     TabPane,

@@ -42,16 +42,13 @@ Switch {
 }
 
 .info-widget {
-    height: auto;
     width: 100%;
-    margin-bottom: 1;
-    padding: 1;
-    text-align: left;
-    text-style: italic;
+    margin: 1;
+    margin-bottom: 2;
 }
 
-#content {
-    min-height: 10;
+#content * {
+    overflow: hidden;
 }
 
 #navi-container {
