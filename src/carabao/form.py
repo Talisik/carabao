@@ -26,6 +26,7 @@ class _Field(Generic[T]):
     name: str
     min_value: int
     max_value: int
+    step: int
 
 
 def _make_field(
@@ -34,6 +35,7 @@ def _make_field(
     cast: Callable[[Any], T],
     min_value: Optional[int],
     max_value: Optional[int],
+    step: int,
 ):
     """
     Create a new field instance with the given parameters.
@@ -58,6 +60,7 @@ def _make_field(
         raw_cast=raw_cast,
         min_value=min_value,  # type: ignore
         max_value=max_value,  # type: ignore
+        step=step,
     )
 
 
@@ -67,6 +70,7 @@ def Field(
     name: str = None,  # type: ignore
     min_value: int = None,  # type: ignore
     max_value: int = None,  # type: ignore
+    step: int = 1,
 ) -> T:
     """
     Create a field for use in a Form class.
@@ -83,6 +87,9 @@ def Field(
         name=name,
         default=default,
         cast=cast,
+        min_value=min_value,
+        max_value=max_value,
+        step=step,
     )  # type: ignore
 
 
@@ -108,7 +115,18 @@ def _get_fields(lane: Type[Lane]):
             names.add(name)
 
             if isinstance(value, _Field):
-                yield value
+                if value.name is None:
+                    yield _make_field(
+                        name=name,
+                        default=value.default,
+                        cast=value.cast,
+                        min_value=value.min_value,
+                        max_value=value.max_value,
+                        step=value.step,
+                    )
+
+                else:
+                    yield value
 
             elif name in annotations:
                 yield _make_field(
@@ -117,6 +135,7 @@ def _get_fields(lane: Type[Lane]):
                     cast=annotations[name],
                     min_value=None,
                     max_value=None,
+                    step=1,
                 )
 
             else:
@@ -126,6 +145,7 @@ def _get_fields(lane: Type[Lane]):
                     cast=str,
                     min_value=None,
                     max_value=None,
+                    step=1,
                 )
 
         for name, cast in annotations.items():
@@ -140,6 +160,7 @@ def _get_fields(lane: Type[Lane]):
                 cast=cast,
                 min_value=None,
                 max_value=None,
+                step=1,
             )
 
 

@@ -1,3 +1,4 @@
+import asyncio
 import os
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Tuple, Type
@@ -15,6 +16,7 @@ from textual.widgets import (
     ListItem,
     ListView,
     Markdown,
+    Static,
     Switch,
     TabbedContent,
     TabPane,
@@ -184,7 +186,8 @@ class Display(App[Result]):
         ):
             lane_name = self.queue_names[self.lane_list.index]
             self.__update_info(lane_name)
-            self.__update_form(lane_name)
+
+            asyncio.run(self.__update_form(lane_name))
 
     def __update_info(self, lane_name: str):
         """
@@ -220,7 +223,7 @@ class Display(App[Result]):
             self.sub_lanes_widget.root,
         )
 
-    def __update_form(
+    async def __update_form(
         self,
         lane_name: str,
     ):
@@ -228,7 +231,8 @@ class Display(App[Result]):
         Update the form with the selected lane's fields.
         """
         form_container = self.query_one("#form-container")
-        form_container.remove_children()
+
+        await form_container.remove_children()
 
         fields = self.lanes[lane_name][1]
 
@@ -237,7 +241,7 @@ class Display(App[Result]):
                 Label(
                     "Not available. "
                     "You can create one by adding a Form class inside your lane.",
-                ),
+                )
             )
 
             form_container.mount(
@@ -265,7 +269,9 @@ class MyLane(Lane):
                     (
                         _form[field.name.lower()]
                         if field.name.lower() in _form
-                        else str(field.default),
+                        else str(field.default)
+                        if field.default is not None
+                        else "",
                         field.cast,
                     )
                 )
@@ -289,12 +295,31 @@ class MyLane(Lane):
                 )
 
             elif field.min_value is not None and field.max_value is not None:
-                form_container.mount(
-                    Slider(
-                        value=int(value) if value is not None else None,
-                        name=name,
-                        min=field.min_value,
-                        max=field.max_value,
+                try:
+                    value = int(value)
+                except Exception:
+                    value = None
+
+                h = Horizontal(
+                    classes="slider-container",
+                )
+
+                form_container.mount(h)
+
+                slider = Slider(
+                    value=value,
+                    name=name,
+                    min=field.min_value,
+                    max=field.max_value,
+                    step=field.step,
+                )
+
+                h.mount(slider)
+
+                h.mount(
+                    Label(
+                        str(slider.value),
+                        classes=f"{name}-value slider-label",
                     )
                 )
 
@@ -384,6 +409,11 @@ class MyLane(Lane):
         if name is None:
             return
 
+        self.query_one(
+            f".{name}-value",
+            Label,
+        ).update(str(event.slider.value))
+
         _, name, field = name.split("-")
         _, cast = self.forms[name][field]
         self.forms[name][field] = str(event.slider.value), cast
@@ -413,7 +443,7 @@ class MyLane(Lane):
             ),
         )
 
-    def __update(self, list_view: ListView):
+    async def __update(self, list_view: ListView):
         if list_view.id != "lanes":
             return
 
@@ -426,12 +456,12 @@ class MyLane(Lane):
         lane_name = self.queue_names[list_view.index]
 
         self.__update_info(lane_name)
-        self.__update_form(lane_name)
+        await self.__update_form(lane_name)
 
     @on(ListView.Selected)
-    def on_list_view_selected(self, event: ListView.Selected):
-        self.__update(event.list_view)
+    async def on_list_view_selected(self, event: ListView.Selected):
+        await self.__update(event.list_view)
 
     @on(ListView.Highlighted)
-    def on_list_view_highlighted(self, event: ListView.Highlighted):
-        self.__update(event.list_view)
+    async def on_list_view_highlighted(self, event: ListView.Highlighted):
+        await self.__update(event.list_view)

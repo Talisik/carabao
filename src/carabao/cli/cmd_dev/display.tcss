@@ -92,3 +92,16 @@ Input {
 Switch > .switch--slider {
     background: #3f3f3f;
 }
+
+Slider {
+    width: 50%;
+}
+
+.slider-container {
+    margin-left: 2;
+}
+
+.slider-label {
+    margin-top: 1;
+    margin-left: 1;
+}
