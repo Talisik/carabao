@@ -378,7 +378,7 @@ class MyLane(Lane):
             return
 
         name = self.queue_names[self.lane_list.index]
-        _form = self.forms[name]
+        _form = self.forms[name] if name in self.forms else {}
 
         self.exit(
             Result(
