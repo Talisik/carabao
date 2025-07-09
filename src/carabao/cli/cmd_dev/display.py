@@ -3,7 +3,8 @@ import os
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Tuple, Type
 
-from l2l import Lane
+from l2l import Lane, Mock
+from l2l.types import LaneDictType
 from textual import on
 from textual.app import App
 from textual.binding import Binding
@@ -206,9 +207,9 @@ class Display(App[Result]):
             ", ".join(lane.name()),
         )
 
-        self.sub_lanes_widget.root.allow_expand = False
-
         self.sub_lanes_widget.root.expand_all()
+
+        self.sub_lanes_widget.root.allow_expand = False
 
         # Build a tree representation of sub-lanes
 
@@ -218,7 +219,7 @@ class Display(App[Result]):
             lane.__name__,
         )
         self.build_lane_tree(
-            lane,
+            lane.get_lanes(),
             self.sub_lanes_widget.root,
         )
 
@@ -335,13 +336,23 @@ class MyLane(Lane):
                     )
                 )
 
+    def build_lane_node(
+        self,
+        node: TreeNode,
+        name: str,
+        priority_number: int,
+    ):
+        return node.add(
+            f"{name + ' ' if name else ''}[dim]{priority_number}[/dim]",
+            expand=True,
+            allow_expand=False,
+        )
+
     def build_lane_tree(
         self,
-        lane: Type[Lane],
+        sub_lanes: LaneDictType,
         node: TreeNode,
     ):
-        sub_lanes = lane.get_lanes()
-
         if not sub_lanes:
             return
 
@@ -356,20 +367,43 @@ class MyLane(Lane):
             ),
             key=lambda x: x[0],
         ):
-            is_str = isinstance(sub_lane, str)
-            text = sub_lane if is_str else sub_lane.__name__
+            if isinstance(sub_lane, str):
+                self.build_lane_node(
+                    node,
+                    sub_lane,
+                    priority_number,
+                )
 
-            sub_node = node.add(
-                f"{text} [dim]{priority_number}[/dim]",
-                expand=True,
-                allow_expand=False,
-            )
+            elif isinstance(sub_lane, type):
+                self.build_lane_tree(
+                    sub_lane.get_lanes(),
+                    self.build_lane_node(
+                        node,
+                        sub_lane.__name__,
+                        priority_number,
+                    ),
+                )
 
-            if not is_str:
+            elif isinstance(sub_lane, dict):
                 self.build_lane_tree(
                     sub_lane,
-                    sub_node,
+                    self.build_lane_node(
+                        node,
+                        "",
+                        priority_number,
+                    ),
                 )
+
+            elif isinstance(sub_lane, Mock):
+                self.build_lane_tree(
+                    sub_lane.lanes,
+                    self.build_lane_node(
+                        node,
+                        "",
+                        priority_number,
+                    ),
+                )
+                continue
 
     def action_exit_app(self):
         """Exit the application."""
