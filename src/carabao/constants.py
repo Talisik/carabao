@@ -440,7 +440,7 @@ try:
     class es(ElasticsearchHub):
         _kwargs = dict(
             request_timeout=30,
-            sniff_on_start=True,
+            # sniff_on_start=True,
             sniff_on_connection_fail=True,
             min_delay_between_sniffing=60,
             max_retries=5,
