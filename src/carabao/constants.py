@@ -12,6 +12,8 @@ T = TypeVar("T")
 @lazy
 class Constants:
     __env = False
+    __values = {}
+    __custom = {}
 
     def __call__(
         self,
@@ -28,6 +30,45 @@ class Constants:
             default=default,
             write_to_env=write_to_env,
         )
+
+    def __getitem__(self, key: str) -> Any:
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
+        return self(key)
+
+    def __setitem__(self, key: str, value: Any):
+        self.__custom[key] = value
+
+    def __delitem__(self, key: str):
+        del self.__custom[key]
+
+    def field(
+        self,
+        *keys,
+        cast: Callable[[Any], T] = str,
+        default: Any = undefined,
+        write_to_env=False,
+    ):
+        def field() -> T:
+            for key in keys:
+                if key in self.__custom:
+                    return self.__custom[key]
+
+                if key in self.__values:
+                    return self.__values[key]
+
+            return self(
+                *keys,
+                cast=cast,
+                default=default,
+                write_to_env=write_to_env,
+            )
+
+        return field
 
     @classmethod
     def load_env(cls):
@@ -86,7 +127,6 @@ class Constants:
                 _ = attr.fget(self)
 
     @property
-    @lazy.fn
     def PROCESSES(self):
         """
         The number of processes to use in the application.
@@ -94,32 +134,50 @@ class Constants:
         Returns:
             int or None: Number of processes to use, or None for default.
         """
+        key = "PROCESSES"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
         self.load_env()
 
-        return env(
-            "PROCESSES",
+        self.__values[key] = value = env(
+            key,
             cast=int,
             default=None,
         )
 
+        return value
+
     @property
-    @lazy.fn
     def DEPLOY_SAFELY(self):
         """
         If `True`,
         things that might be bad in a proper deployment will be adjusted,
         such as testing-related stuff.
         """
+        key = "DEPLOY_SAFELY"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
         self.load_env()
 
-        return env(
-            "DEPLOY_SAFELY",
+        self.__values[key] = value = env(
+            key,
             cast=bool,
             default=True,
         )
 
+        return value
+
     @property
-    @lazy.fn
     def POD_NAME(self):
         """
         The name of the Kubernetes pod running this application.
@@ -127,16 +185,25 @@ class Constants:
         Returns:
             str: The pod name, or empty string if not in Kubernetes.
         """
+        key = "POD_NAME"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
         self.load_env()
 
-        return env(
-            "POD_NAME",
+        self.__values[key] = value = env(
+            key,
             cast=str,
             default="",
         )
 
+        return value
+
     @property
-    @lazy.fn
     def POD_INDEX(self):
         """
         The index of the pod in a stateful set, extracted from POD_NAME.
@@ -144,22 +211,39 @@ class Constants:
         Returns:
             int: The pod index, or 0 if not determinable.
         """
+        key = "POD_INDEX"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
         self.load_env()
 
         try:
-            return int(self.POD_NAME.split("-")[-1])
+            self.__values[key] = value = int(self.POD_NAME.split("-")[-1])
         except Exception:
-            return 0
+            self.__values[key] = value = 0
+
+        return value
 
     @property
-    @lazy.fn
     def IN_KUBERNETES(self):
         """
         If this process is running inside Kubernetes.
         """
+        key = "IN_KUBERNETES"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
         self.load_env()
 
-        return any(
+        self.__values[key] = value = any(
             map(
                 # Prevent testing mode in Kubernetes.
                 lambda key: "kubernetes" in key.lower(),
@@ -167,8 +251,9 @@ class Constants:
             )
         )
 
+        return value
+
     @property
-    @lazy.fn
     def ENVIRONMENT(self):
         """
         The current environment the application is running in.
@@ -176,16 +261,25 @@ class Constants:
         Returns:
             str: The environment name (e.g., 'production', 'staging', 'development').
         """
+        key = "ENVIRONMENT"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
         self.load_env()
 
-        return env(
-            "ENVIRONMENT",
+        self.__values[key] = value = env(
+            key,
             cast=str,
             default="staging",
         )
 
+        return value
+
     @property
-    @lazy.fn
     def IN_DEVELOPMENT(self):
         """
         Indicates if the application is ran via `carabao dev` or `moo dev`.
@@ -198,7 +292,6 @@ class Constants:
         return Core.is_dev()
 
     @property
-    @lazy.fn
     def IS_PRODUCTION(self):
         """
         Indicates if the application is running in a production environment.
@@ -211,7 +304,6 @@ class Constants:
         return self.ENVIRONMENT == "production"
 
     @property
-    @lazy.fn
     def IS_STAGING(self):
         """
         Indicates if the application is running in a staging environment.
@@ -224,36 +316,39 @@ class Constants:
         return self.ENVIRONMENT == "staging"
 
     @property
-    @lazy.fn
     def TESTING(self):
         """
         For testing purposes.
 
         Always `False` inside Kubernetes.
         """
+        key = "TESTING"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
         self.load_env()
 
         from .core import Core
 
         is_test = Core.is_test()
 
-        if is_test is not None:
-            return is_test
-
-        return (
-            False
-            if self.DEPLOY_SAFELY and self.IN_KUBERNETES
+        self.__values[key] = value = (
+            is_test
+            if is_test is not None
             else (
-                env(
-                    "TESTING",
-                    cast=bool,
-                    default=False,
-                )
+                False
+                if self.DEPLOY_SAFELY and self.IN_KUBERNETES
+                else env(key, cast=bool, default=False)
             )
         )
 
+        return value
+
     @property
-    @lazy.fn
     def SINGLE_RUN(self):
         """
         Determines if the application should run only once.
@@ -261,15 +356,25 @@ class Constants:
         Returns:
             bool: True if application should exit after one run, False for continuous execution.
         """
+        key = "SINGLE_RUN"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
         self.load_env()
-        return env(
-            "SINGLE_RUN",
+
+        self.__values[key] = value = env(
+            key,
             cast=bool,
             default=True,
         )
 
+        return value
+
     @property
-    @lazy.fn
     def QUEUE_NAME(self):
         """
         The name of the queue to process.
@@ -277,21 +382,31 @@ class Constants:
         Returns:
             str or None: The queue name or None if not specified.
         """
+        key = "QUEUE_NAME"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
         from .core import Core
 
         custom_name = Core.name()
 
         if custom_name is not None:
-            return custom_name
+            self.__values[key] = value = custom_name
 
-        return env(
-            "QUEUE_NAME",
-            cast=str,
-            default=None,
-        )
+        else:
+            self.__values[key] = value = env(
+                key,
+                cast=str,
+                default=None,
+            )
+
+        return value
 
     @property
-    @lazy.fn
     def BATCH_SIZE(self):
         """
         The number of items to process in a batch.
@@ -299,15 +414,25 @@ class Constants:
         Returns:
             int: Batch size, defaults to 1 if not specified.
         """
+        key = "BATCH_SIZE"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
         self.load_env()
-        return env(
-            "BATCH_SIZE",
+
+        self.__values[key] = value = env(
+            key,
             cast=int,
             default=1,
         )
 
+        return value
+
     @property
-    @lazy.fn
     def SLEEP_MIN(self):
         """
         The minimum sleep time between loop iterations when no work is available.
@@ -315,16 +440,25 @@ class Constants:
         Returns:
             float: Minimum sleep time in seconds, defaults to 3.
         """
+        key = "SLEEP_MIN"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
         self.load_env()
 
-        return env(
-            "SLEEP_MIN",
+        self.__values[key] = value = env(
+            key,
             cast=float,
             default=3,
         )
 
+        return value
+
     @property
-    @lazy.fn
     def SLEEP_MAX(self):
         """
         The maximum sleep time between loop iterations when no work is available.
@@ -332,16 +466,25 @@ class Constants:
         Returns:
             float: Maximum sleep time in seconds, defaults to 5.
         """
+        key = "SLEEP_MAX"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
         self.load_env()
 
-        return env(
-            "SLEEP_MAX",
+        self.__values[key] = value = env(
+            key,
             cast=float,
             default=5,
         )
 
+        return value
+
     @property
-    @lazy.fn
     def EXIT_ON_FINISH(self):
         """
         Determines if the application should exit after all work is finished.
@@ -349,16 +492,25 @@ class Constants:
         Returns:
             bool: True if the application should exit when finished, False otherwise.
         """
+        key = "EXIT_ON_FINISH"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
         self.load_env()
 
-        return env(
-            "EXIT_ON_FINISH",
+        self.__values[key] = value = env(
+            key,
             cast=bool,
             default=True,
         )
 
+        return value
+
     @property
-    @lazy.fn
     def EXIT_DELAY(self):
         """
         The delay before exiting after all work is finished, when EXIT_ON_FINISH is True.
@@ -366,23 +518,40 @@ class Constants:
         Returns:
             float: Exit delay in seconds, defaults to 3.
         """
+        key = "EXIT_DELAY"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
         self.load_env()
 
-        return env(
-            "EXIT_DELAY",
+        self.__values[key] = value = env(
+            key,
             cast=float,
             default=3,
         )
 
+        return value
+
     @property
-    @lazy.fn
     def LANE_DIRECTORIES(self):
         """
         A list of directories where lane modules are located.
         """
+        key = "LANE_DIRECTORIES"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
         self.load_env()
 
-        return env(
+        self.__values[key] = value = env(
             "LANE_DIRECTORIES",
             cast=lambda value: [
                 item.strip()
@@ -393,6 +562,8 @@ class Constants:
             ],
             default=["lanes"],
         )
+
+        return value
 
 
 C = Constants()
