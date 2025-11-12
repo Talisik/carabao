@@ -103,7 +103,7 @@ class Settings:
         )
 
     @classmethod
-    def value_of(cls, key: str):
+    def value_of(cls, key: str) -> Any:
         """
         Gets the value of a setting by key name.
 

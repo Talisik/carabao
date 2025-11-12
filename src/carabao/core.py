@@ -192,8 +192,8 @@ class Core:
         main = LazyMain(
             main=Lane.start,
             run_once=settings.value_of("SINGLE_RUN"),
-            sleep_min=settings.value_of("SLEEP_MIN"),
-            sleep_max=settings.value_of("SLEEP_MAX"),
+            sleep_min=lambda: settings.value_of("SLEEP_MIN"),
+            sleep_max=lambda: settings.value_of("SLEEP_MAX"),
             exit_on_finish=settings.value_of("EXIT_ON_FINISH"),
             exit_delay=settings.value_of("EXIT_DELAY"),
             error_handler=settings.error_handler,
