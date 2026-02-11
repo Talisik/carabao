@@ -56,5 +56,8 @@ class StdOutCatcher(StringIO):
         """
         Stop capturing stdout and restore the original stdout.
         """
+        if "__stdout" not in self.__dict__:
+            return
+
         sys.stdout = self.__stdout
         del self.__stdout
