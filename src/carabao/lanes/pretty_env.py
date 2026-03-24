@@ -37,5 +37,4 @@ class PrettyEnv(Lane):
     def process(self, value):
         pretty_print(
             keys=mentioned_keys.keys(),
-            confidential_keywords=[],
         )
