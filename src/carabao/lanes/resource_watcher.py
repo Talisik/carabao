@@ -6,14 +6,28 @@ from collections import deque
 from dataclasses import dataclass, field
 
 from l2l import Lane
-from loguru import logger
 
 from carabao.constants import C
+
+try:
+    from loguru import logger
+except ImportError:
+    logger = None
 
 try:
     import psutil
 except ImportError:
     psutil = None
+
+
+def _log(msg: str, *, warn: bool = False) -> None:
+    if logger is not None:
+        if warn:
+            logger.warning(msg)
+        else:
+            logger.debug(msg)
+    else:
+        print(msg)
 
 _MB = 1024 * 1024
 _WARN = "\u26a0\ufe0f "
@@ -83,7 +97,7 @@ class ResourceWatcher(Lane):
 
     def process(self, value):
         if psutil is None:
-            logger.warning("psutil is required for ResourceWatcher: pip install psutil")
+            _log("psutil is required for ResourceWatcher: pip install psutil", warn=True)
             return
 
         threading.Thread(
@@ -169,8 +183,8 @@ class ResourceWatcher(Lane):
             msg = " | ".join(parts)
 
             if any(checks.values()):
-                logger.warning(msg)
+                _log(msg, warn=True)
             else:
-                logger.debug(msg)
+                _log(msg)
 
             time.sleep(interval)
