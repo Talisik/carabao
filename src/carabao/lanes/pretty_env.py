@@ -1,6 +1,8 @@
 from fun_things.environment import mentioned_keys, pretty_print
 from l2l import Lane
 
+from carabao.constants import C
+
 
 class PrettyEnv(Lane):
     """
@@ -32,7 +34,11 @@ class PrettyEnv(Lane):
 
     @classmethod
     def condition(cls, name: str):
-        return True
+        return C(
+            "PRETTY_ENV",
+            cast=bool,
+            default=True,
+        )
 
     def process(self, value):
         pretty_print(
