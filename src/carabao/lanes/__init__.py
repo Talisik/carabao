@@ -1,6 +1,7 @@
 from .log_to_db import LogToDB
 from .network_health import NetworkHealth
+from .network_watcher import NetworkWatcher
 from .pretty_env import PrettyEnv
 from .resource_watcher import ResourceWatcher
 
-__all__ = ["LogToDB", "NetworkHealth", "PrettyEnv", "ResourceWatcher"]
+__all__ = ["LogToDB", "NetworkHealth", "NetworkWatcher", "PrettyEnv", "ResourceWatcher"]
