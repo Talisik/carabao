@@ -1,6 +1,7 @@
 import threading
 import time
 from dataclasses import dataclass
+from typing import Callable, Optional
 
 from l2l import Lane
 
@@ -15,16 +16,6 @@ try:
     import psutil
 except ImportError:
     psutil = None
-
-
-def _log(msg: str, *, warn: bool = False) -> None:
-    if logger is not None:
-        if warn:
-            logger.info(msg)
-        else:
-            logger.debug(msg)
-    else:
-        print(msg)
 
 
 _KB = 1024
@@ -59,6 +50,13 @@ class NetworkWatcher(Lane):
     usage when the rolling average exceeds the configured threshold.
     """
 
+    debug_logger: Optional[Callable[[str]]] = lambda x: (
+        logger.debug(x) if logger is not None else print(x)
+    )
+    info_logger: Optional[Callable[[str]]] = lambda x: (
+        logger.info(x) if logger is not None else print(x)
+    )
+
     @classmethod
     def passive(cls) -> bool:
         return True
@@ -84,8 +82,10 @@ class NetworkWatcher(Lane):
         )
 
     def process(self, value):
-        if psutil is None:
-            _log("psutil is required for NetworkWatcher: pip install psutil", warn=True)
+        if psutil is None and self.info_logger:
+            self.info_logger(
+                "psutil is required for NetworkWatcher: pip install psutil",
+            )
             return
 
         threading.Thread(
@@ -128,8 +128,9 @@ class NetworkWatcher(Lane):
             msg = f"Recv: {_fmt_rate(recv_bps)} | Sent: {_fmt_rate(sent_bps)}"
 
             if high_recv or high_sent:
-                _log(msg, warn=True)
-            else:
-                _log(msg)
+                if self.info_logger:
+                    self.info_logger(msg)
+            elif self.debug_logger:
+                self.debug_logger(msg)
 
             time.sleep(interval)

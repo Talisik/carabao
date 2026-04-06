@@ -4,6 +4,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from typing import Callable, Optional
 
 from l2l import Lane
 
@@ -19,15 +20,6 @@ try:
 except ImportError:
     psutil = None
 
-
-def _log(msg: str, *, warn: bool = False) -> None:
-    if logger is not None:
-        if warn:
-            logger.warning(msg)
-        else:
-            logger.debug(msg)
-    else:
-        print(msg)
 
 _MB = 1024 * 1024
 _WARN = "\u26a0\ufe0f "
@@ -71,6 +63,13 @@ class ResourceWatcher(Lane):
     I/O rate, and GC pressure — flagging any that exceed their thresholds.
     """
 
+    debug_logger: Optional[Callable[[str]]] = lambda x: (
+        logger.debug(x) if logger is not None else print(x)
+    )
+    info_logger: Optional[Callable[[str]]] = lambda x: (
+        logger.info(x) if logger is not None else print(x)
+    )
+
     @classmethod
     def passive(cls) -> bool:
         return True
@@ -96,8 +95,10 @@ class ResourceWatcher(Lane):
         )
 
     def process(self, value):
-        if psutil is None:
-            _log("psutil is required for ResourceWatcher: pip install psutil", warn=True)
+        if psutil is None and self.info_logger:
+            self.info_logger(
+                "psutil is required for ResourceWatcher: pip install psutil",
+            )
             return
 
         threading.Thread(
@@ -183,8 +184,9 @@ class ResourceWatcher(Lane):
             msg = " | ".join(parts)
 
             if any(checks.values()):
-                _log(msg, warn=True)
-            else:
-                _log(msg)
+                if self.info_logger:
+                    self.info_logger(msg)
+            elif self.debug_logger:
+                self.debug_logger(msg)
 
             time.sleep(interval)
