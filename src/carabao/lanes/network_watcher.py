@@ -82,8 +82,8 @@ class NetworkWatcher(Lane):
         )
 
     def process(self, value):
-        if psutil is None and self.info_logger:
-            self.info_logger(
+        if psutil is None and NetworkWatcher.info_logger:
+            NetworkWatcher.info_logger(
                 "psutil is required for NetworkWatcher: pip install psutil",
             )
             return
@@ -128,9 +128,9 @@ class NetworkWatcher(Lane):
             msg = f"Recv: {_fmt_rate(recv_bps)} | Sent: {_fmt_rate(sent_bps)}"
 
             if high_recv or high_sent:
-                if self.info_logger:
-                    self.info_logger(msg)
-            elif self.debug_logger:
-                self.debug_logger(msg)
+                if NetworkWatcher.info_logger:
+                    NetworkWatcher.info_logger(msg)
+            elif NetworkWatcher.debug_logger:
+                NetworkWatcher.debug_logger(msg)
 
             time.sleep(interval)

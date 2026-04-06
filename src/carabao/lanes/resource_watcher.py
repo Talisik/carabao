@@ -95,8 +95,8 @@ class ResourceWatcher(Lane):
         )
 
     def process(self, value):
-        if psutil is None and self.info_logger:
-            self.info_logger(
+        if psutil is None and ResourceWatcher.info_logger:
+            ResourceWatcher.info_logger(
                 "psutil is required for ResourceWatcher: pip install psutil",
             )
             return
@@ -184,9 +184,9 @@ class ResourceWatcher(Lane):
             msg = " | ".join(parts)
 
             if any(checks.values()):
-                if self.info_logger:
-                    self.info_logger(msg)
-            elif self.debug_logger:
-                self.debug_logger(msg)
+                if ResourceWatcher.info_logger:
+                    ResourceWatcher.info_logger(msg)
+            elif ResourceWatcher.debug_logger:
+                ResourceWatcher.debug_logger(msg)
 
             time.sleep(interval)
