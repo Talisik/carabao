@@ -4,7 +4,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from l2l import Lane
 
@@ -63,10 +63,10 @@ class ResourceWatcher(Lane):
     I/O rate, and GC pressure — flagging any that exceed their thresholds.
     """
 
-    debug_logger: Optional[Callable[[str]]] = lambda x: (
+    debug_logger: Optional[Callable[[str], Any]] = lambda x: (
         logger.debug(x) if logger is not None else print(x)
     )
-    info_logger: Optional[Callable[[str]]] = lambda x: (
+    info_logger: Optional[Callable[[str], Any]] = lambda x: (
         logger.info(x) if logger is not None else print(x)
     )
 

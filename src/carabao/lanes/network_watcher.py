@@ -1,7 +1,7 @@
 import threading
 import time
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from l2l import Lane
 
@@ -50,10 +50,10 @@ class NetworkWatcher(Lane):
     usage when the rolling average exceeds the configured threshold.
     """
 
-    debug_logger: Optional[Callable[[str]]] = lambda x: (
+    debug_logger: Optional[Callable[[str], Any]] = lambda x: (
         logger.debug(x) if logger is not None else print(x)
     )
-    info_logger: Optional[Callable[[str]]] = lambda x: (
+    info_logger: Optional[Callable[[str], Any]] = lambda x: (
         logger.info(x) if logger is not None else print(x)
     )
 
