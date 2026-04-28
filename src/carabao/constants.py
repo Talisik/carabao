@@ -571,8 +571,7 @@ C = Constants()
 try:
     from fun_things.singleton_hub.mongo_hub import MongoHub
 
-    class mongo(MongoHub):
-        pass
+    class mongo(MongoHub): ...
 
 except Exception:
     pass
