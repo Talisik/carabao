@@ -75,12 +75,7 @@ class ESKuma(UptimeKuma):
             except Exception:
                 nodes = []
 
-            address = ",".join(
-                sorted(
-                    f"{node.host}:{node.port}"
-                    for node in nodes
-                )
-            )
+            address = ",".join(sorted(f"{node.host}:{node.port}" for node in nodes))
 
             if not address:
                 continue
@@ -91,18 +86,22 @@ class ESKuma(UptimeKuma):
             cache.add(address)
 
             try:
-                client.options(
+                response = client.options(
                     request_timeout=timeout,
                 ).ping()
-                continue
+
+                if response:
+                    continue
 
             except Exception:
-                ok = False
+                ...
 
-                self.ping(
-                    format,
-                    url,
-                    address,
-                )
+            ok = False
+
+            self.ping(
+                format,
+                url,
+                address,
+            )
 
         return ok

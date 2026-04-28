@@ -35,7 +35,7 @@ class RedisKuma(UptimeKuma):
             "REDIS_KUMA_URL",
             default=None,
         ) or C(
-            "REDIS_KUMA_URL",
+            "UPTIME_KUMA_URL",
             default=None,
         )
 
@@ -62,6 +62,12 @@ class RedisKuma(UptimeKuma):
         cache = set()
         ok = True
 
+        timeout = C(
+            "REDIS_KUMA_PING_TIMEOUT",
+            cast=float,
+            default=3,
+        )
+
         for client in redis.get_all():
             kwargs = client.connection_pool.connection_kwargs
             address = f"{kwargs.get('host')}:{kwargs.get('port')}"
@@ -74,20 +80,37 @@ class RedisKuma(UptimeKuma):
 
             cache.add(address)
 
+            probe_kwargs = {
+                **kwargs,
+                "socket_timeout": timeout,
+                "socket_connect_timeout": timeout,
+                "retry_on_timeout": False,
+                "retry_on_error": [],
+            }
+
+            probe_kwargs.pop("retry", None)
+
             try:
-                client.execute_command(
-                    "PING",
-                    socket_timeout=5,
-                )
-                continue
+                probe = Redis(**probe_kwargs)
+
+                try:
+                    response = probe.ping()
+
+                finally:
+                    probe.close()
+
+                if response:
+                    continue
 
             except Exception:
-                ok = False
+                continue
 
-                self.ping(
-                    format,
-                    url,
-                    address,
-                )
+            ok = False
+
+            self.ping(
+                format,
+                url,
+                address,
+            )
 
         return ok
