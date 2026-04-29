@@ -50,12 +50,33 @@ class RedisMeta(RedisHubMeta):
         )
 
         try:
-            probe = Redis(
-                host=host,
-                port=port,
-                socket_timeout=timeout,
-                socket_connect_timeout=timeout,
-            )
+            probe_kwargs = {
+                k: v
+                for k, v in kwargs.items()
+                if k
+                in (
+                    "host",
+                    "port",
+                    "db",
+                    "username",
+                    "password",
+                    "ssl",
+                    "ssl_keyfile",
+                    "ssl_certfile",
+                    "ssl_cert_reqs",
+                    "ssl_ca_certs",
+                    "ssl_ca_data",
+                    "ssl_check_hostname",
+                    "unix_socket_path",
+                    "encoding",
+                    "encoding_errors",
+                    "client_name",
+                )
+            }
+            probe_kwargs["socket_timeout"] = timeout
+            probe_kwargs["socket_connect_timeout"] = timeout
+
+            probe = Redis(**probe_kwargs)
 
             try:
                 probe.ping()
