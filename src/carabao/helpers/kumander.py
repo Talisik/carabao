@@ -60,7 +60,7 @@ class Kumander:
                     "msg": self.format.format(
                         APP_TAG=C(
                             "APP_TAG",
-                            "unknown_tag",
+                            default="unknown_tag",
                         ),
                         POD_NAME=C.POD_NAME,
                         KIND=kind,
