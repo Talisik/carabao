@@ -21,7 +21,17 @@ class Constants:
         cast: Callable[[Any], T] = str,
         default: Any = undefined,
         write_to_env=False,
+        read_custom=True,
+        read_cache=True,
     ):
+        if read_custom or read_cache:
+            for key in keys:
+                if read_custom and key in self.__custom:
+                    return self.__custom[key]
+
+                if read_cache and key in self.__values:
+                    return self.__values[key]
+
         self.load_env()
 
         return env(
