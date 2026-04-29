@@ -137,6 +137,46 @@ class Constants:
                 _ = attr.fget(self)
 
     @property
+    def APP_TAG(self):
+        key = "APP_TAG"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
+        self.load_env()
+
+        self.__values[key] = value = env(
+            key,
+            cast=str,
+            default=None,
+        )
+
+        return value
+
+    @property
+    def APP_NAME(self):
+        key = "APP_NAME"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
+        self.load_env()
+
+        self.__values[key] = value = env(
+            key,
+            cast=str,
+            default=None,
+        )
+
+        return value
+
+    @property
     def PROCESSES(self):
         """
         The number of processes to use in the application.

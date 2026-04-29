@@ -18,7 +18,7 @@ class Kumander:
     def format(self):
         return C(
             "UPTIME_KUMA_FORMAT",
-            default="({APP_TAG}) {POD_NAME} @ {KIND} {ADDRESSES}",
+            default="{KIND} {ADDRESSES} @ <{APP_TAG}> {APP_NAME} - {POD_NAME}",
         )
 
     @property
@@ -58,10 +58,8 @@ class Kumander:
                 {
                     "status": self.status,
                     "msg": self.format.format(
-                        APP_TAG=C(
-                            "APP_TAG",
-                            default="unknown_tag",
-                        ),
+                        APP_TAG=C.APP_TAG or "unknown",
+                        APP_NAME=C.APP_NAME or "unknown",
                         POD_NAME=C.POD_NAME,
                         KIND=kind,
                         ADDRESSES=addresses,
