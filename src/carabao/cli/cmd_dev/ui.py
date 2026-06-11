@@ -117,7 +117,7 @@ _LEVEL_COLOR = {
 _SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 _HOTKEYS_RUNNING = "[b]esc[/] quit   [b]/[/] search"
 # Highlight "esc quit" once the pipeline is done — the user can safely exit.
-_HOTKEYS_DONE = "[b bright_red]esc quit[/]   [b]/[/] search"
+_HOTKEYS_DONE = "[b #ff4d4d]esc quit[/]   [b]/[/] search"
 
 
 class _LogWriter:
