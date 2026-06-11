@@ -121,7 +121,7 @@ class Display(App[Result]):
                 classes="info-label",
             )
 
-            self.sub_lanes_widget = Tree("")
+            self.sub_lanes_widget = Tree("", id="process-tree")
 
             yield self.sub_lanes_widget
 

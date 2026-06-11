@@ -19,7 +19,8 @@ from textual import on
 from textual.app import App
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Checkbox, Footer, Input, RichLog, Static, Tree
+from textual.screen import ModalScreen
+from textual.widgets import Button, Checkbox, Footer, Input, Label, RichLog, Static, Tree
 from textual.widgets.tree import TreeNode
 
 _LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"]
@@ -80,6 +81,48 @@ class _LoggingHandler(logging.Handler):
             pass
 
 
+class _ConfirmQuit(ModalScreen[bool]):
+    """Confirmation shown when quitting while the pipeline is still running."""
+
+    CSS = """
+    _ConfirmQuit { align: center middle; }
+    #confirm-box {
+        width: 48; height: auto; padding: 1 2;
+        border: round $warning; background: $surface;
+    }
+    #confirm-box Label { width: 100%; text-align: center; margin-bottom: 1; }
+    #confirm-buttons { height: auto; align: center middle; }
+    #confirm-buttons Button { margin: 0 1; }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+        Binding("y", "confirm", "Quit"),
+        Binding("n", "cancel", "Cancel"),
+    ]
+
+    def compose(self):
+        with Vertical(id="confirm-box"):
+            yield Label("Pipeline is still running.\nQuit anyway?")
+            with Horizontal(id="confirm-buttons"):
+                yield Button("Quit", variant="error", id="confirm-yes")
+                yield Button("Cancel", variant="primary", id="confirm-no")
+
+    @on(Button.Pressed, "#confirm-yes")
+    def _yes(self):
+        self.dismiss(True)
+
+    @on(Button.Pressed, "#confirm-no")
+    def _no(self):
+        self.dismiss(False)
+
+    def action_confirm(self):
+        self.dismiss(True)
+
+    def action_cancel(self):
+        self.dismiss(False)
+
+
 class _NodeState:
     __slots__ = ("node", "name", "state", "work")
 
@@ -100,16 +143,16 @@ class UI(App):
     #logs { width: 1fr; background: transparent; }
     #filters { height: auto; padding: 0 1; background: transparent; }
     #filters Checkbox { width: auto; height: 1; border: none; padding: 0; margin-right: 2; background: transparent; }
-    #filters Checkbox > .toggle--button { color: $panel; }
-    #filters Checkbox.-on > .toggle--button { color: $text-success; }
-    #search { width: 1fr; background: transparent; }
+    #filters Checkbox > .toggle--button { background: transparent; color: $panel; }
+    #filters Checkbox.-on > .toggle--button { background: transparent; color: $text-success; }
+    #search { width: 1fr; background: $surface; }
     RichLog { height: 1fr; background: transparent; }
     Tree { background: transparent; }
     #status { height: 1; padding: 0 1; margin-top: 1; background: transparent; }
     """
 
     BINDINGS = [
-        Binding("escape", "quit", "Quit", priority=True),
+        Binding("escape", "request_quit", "Quit", priority=True),
         Binding("slash", "focus_search", "Search"),
     ]
 
@@ -127,6 +170,7 @@ class UI(App):
         self._enabled_levels: set = set(_LEVELS)
         self._search: str = ""
         self._frame = 0
+        self._finished = False
 
     # ---- layout ----------------------------------------------------------
 
@@ -247,6 +291,8 @@ class UI(App):
             sys.stdout.flush()
             sys.stdout = prev_stdout
 
+        self._finished = True
+
         # The app may already be shutting down; ignore if so.
         try:
             # Nothing is running anymore: stop any spinners left active by
@@ -311,20 +357,19 @@ class UI(App):
             return
 
         if kind == "lane_started":
-            # Generator entered — create the node as pending. (These bunch up
-            # at the start of the run; activity is tracked via lane_active.)
+            # Ignored: generator-entry order is lazy/reversed. The tree is built
+            # from lane_active instead, which fires in true execution order.
+            return
+
+        elif kind == "lane_active":
+            # A process() call is running now — exactly one lane at a time, in
+            # real execution order. Creating nodes here keeps the tree ordered
+            # and drives the spinner truthfully.
             entry = self._ensure_node(
                 run_id,
                 payload.get("name"),
                 payload.get("parent_id"),
             )
-            if entry.state == "pending":
-                self._render_node(run_id)
-
-        elif kind == "lane_active":
-            # A process() call is running now — exactly one lane at a time, in
-            # real execution order. This drives the spinner truthfully.
-            entry = self._ensure_node(run_id, payload.get("name"), None)
             entry.state = "active"
             self._active.add(run_id)
             self._render_node(run_id)
@@ -440,3 +485,15 @@ class UI(App):
 
     def action_focus_search(self):
         self.query_one("#search", Input).focus()
+
+    def action_request_quit(self):
+        # Quit immediately once the run is done; otherwise confirm first.
+        if self._finished:
+            self.exit()
+            return
+
+        def _on_result(confirmed: Optional[bool]):
+            if confirmed:
+                self.exit()
+
+        self.push_screen(_ConfirmQuit(), _on_result)

@@ -13,10 +13,12 @@ ListView {
     overflow: auto;
     overflow-x: hidden;
     width: 30%;
+    background: transparent;
 }
 
 ListItem {
     padding: 1 2;
+    background: transparent;
 }
 
 Button:focus {
@@ -44,6 +46,17 @@ Button:focus {
 Tree {
     padding: 1 2;
     height: auto;
+    background: transparent;
+}
+
+/* Transparency: id selectors beat the widgets' own DEFAULT_CSS surface, and
+   the tab containers must be transparent too or the tree shows their surface. */
+#lanes, #process-tree {
+    background: transparent;
+}
+
+TabbedContent, TabPane, ContentSwitcher {
+    background: transparent;
 }
 
 #navi-container {
@@ -52,13 +65,19 @@ Tree {
     padding: 0 3;
 }
 
+/* ANSI named colors render solid in ansi_color mode (theme hex collapses to
+   transparent there). */
 #run {
     width: 30%;
+    background: green;
+    color: auto;
 }
 
 #exit {
     width: 20%;
     dock: right;
+    background: red;
+    color: auto;
 }
 
 Switch {
