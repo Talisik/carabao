@@ -81,6 +81,13 @@ class _LoggingHandler(logging.Handler):
             pass
 
 
+class _Checkbox(Checkbox):
+    """Checkbox without the ``▐ ▌`` side bars (the white block)."""
+
+    BUTTON_LEFT = ""
+    BUTTON_RIGHT = ""
+
+
 class _SelectableRichLog(RichLog):
     """RichLog that supports mouse text selection + copy (Ctrl+C).
 
@@ -160,12 +167,13 @@ class UI(App):
     Screen { background: transparent; }
     #body { height: 1fr; background: transparent; }
     #tree { width: 25%; border-right: solid $accent; background: transparent; }
-    #logs { width: 1fr; background: transparent; }
+    #logs { width: 1fr; margin-left: 2; background: transparent; }
     #filters { height: auto; padding: 0 1; background: transparent; }
     #filters Checkbox { width: auto; height: 1; border: none; padding: 0; margin-right: 2; background: transparent; }
     #filters Checkbox > .toggle--button { background: transparent; color: $panel; }
     #filters Checkbox.-on > .toggle--button { background: transparent; color: $text-success; }
-    #search { width: 1fr; background: transparent; border: none; height: 3; content-align: left middle; }
+    /* Thin border puts the text on the inner row → vertically centered. */
+    #search { width: 1fr; background: transparent; border: round $accent; height: auto; margin-bottom: 1; }
     RichLog { height: 1fr; background: transparent; }
     Tree { background: transparent; }
 
@@ -216,7 +224,7 @@ class UI(App):
             with Vertical(id="logs"):
                 with Horizontal(id="filters"):
                     for level in _LEVELS:
-                        yield Checkbox(level, value=True, name=level)
+                        yield _Checkbox(level, value=True, name=level)
 
                 yield Input(placeholder="Search logs…", id="search")
                 self._richlog = _SelectableRichLog(
@@ -230,7 +238,7 @@ class UI(App):
         # Bottom bar: hotkeys on the left, run status on the right.
         with Horizontal(id="bottombar"):
             yield Static("[b]esc[/] quit   [b]/[/] search", id="hotkeys")
-            self._status_bar = Static("Starting…", id="status")
+            self._status_bar = Static("Running…", id="status")
             yield self._status_bar
 
     def on_mount(self):
@@ -465,7 +473,9 @@ class UI(App):
             frame = _SPINNER[self._frame % len(_SPINNER)]
             label = f"[#3b82f6]{frame}[/] [bold]{name}[/]"
         elif entry.state == "done":
-            secs = f" [bright_black]{entry.work:.2f}s[/]" if entry.work is not None else ""
+            secs = (
+                f" [bright_black]{entry.work:.2f}s[/]" if entry.work is not None else ""
+            )
             label = f"[green]✓[/] {name}{secs}"
         elif entry.state == "terminated":
             label = f"[red]✕[/] {name}"
