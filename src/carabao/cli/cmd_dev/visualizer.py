@@ -7,6 +7,7 @@ searchable/filterable log pane (fed by ``l2l.logger`` via a sink).
 Launched from the dev command when the "📊 Visualizer" switch is on.
 """
 
+import logging
 import os
 import sys
 import threading
@@ -65,14 +66,28 @@ class _LogWriter:
         return False
 
 
+class _LoggingHandler(logging.Handler):
+    """Bridges the stdlib ``logging`` module into the log pane."""
+
+    def __init__(self, forward: Callable[[str, str], None]):
+        super().__init__()
+        self._forward = forward
+
+    def emit(self, record: logging.LogRecord):
+        try:
+            self._forward(record.levelname, record.getMessage())
+        except Exception:
+            pass
+
+
 class _NodeState:
-    __slots__ = ("node", "name", "state", "duration")
+    __slots__ = ("node", "name", "state", "work")
 
     def __init__(self, node: TreeNode, name: str):
         self.node = node
         self.name = name
         self.state = "pending"
-        self.duration: Optional[float] = None
+        self.work: Optional[float] = None
 
 
 class UI(App):
@@ -145,6 +160,7 @@ class UI(App):
         events.subscribe(self._on_event)
         logger.add_sink(self._on_log)
         self._bridge_loguru()
+        self._bridge_logging()
         self.set_interval(0.1, self._tick_spinner)
         # Daemon thread: the pipeline keeps running off the UI thread, and
         # quitting the app can't hang on a run-forever loop.
@@ -162,6 +178,11 @@ class UI(App):
                 loguru_logger.remove(self._loguru_id)
             except Exception:
                 pass
+
+        if getattr(self, "_logging_handler", None) is not None:
+            root = logging.getLogger()
+            root.removeHandler(self._logging_handler)
+            root.setLevel(self._prev_root_level)
 
         if hasattr(self, "_prev_stream"):
             logger.set_stream(self._prev_stream)
@@ -183,6 +204,18 @@ class UI(App):
             self._loguru_id = loguru_logger.add(sink, level="DEBUG")
         except Exception:
             pass
+
+    def _bridge_logging(self):
+        """Mirror stdlib ``logging`` (user lanes / libraries) into the log pane."""
+        self._logging_handler = _LoggingHandler(self._on_log)
+        self._logging_handler.setLevel(logging.DEBUG)
+
+        root = logging.getLogger()
+        self._prev_root_level = root.level
+        # Lower the root level so DEBUG/INFO records reach the handler; restored
+        # on unmount.
+        root.setLevel(logging.DEBUG)
+        root.addHandler(self._logging_handler)
 
     # ---- worker ----------------------------------------------------------
 
@@ -272,7 +305,9 @@ class UI(App):
         elif kind == "lane_done":
             entry = self._ensure_node(run_id, payload.get("name"), None)
             entry.state = "terminated" if payload.get("terminated") else "done"
-            entry.duration = payload.get("duration")
+            # 'work' = truthful self-compute time (wall-clock 'duration' bunches
+            # up at pipeline drain for streaming lanes).
+            entry.work = payload.get("work")
             self._active.discard(run_id)
             self._render_node(run_id)
 
@@ -295,7 +330,7 @@ class UI(App):
             frame = _SPINNER[self._frame % len(_SPINNER)]
             label = f"[yellow]{frame}[/] [bold]{name}[/]"
         elif entry.state == "done":
-            secs = f" [dim]{entry.duration:.2f}s[/]" if entry.duration else ""
+            secs = f" [dim]{entry.work:.2f}s[/]" if entry.work is not None else ""
             label = f"[green]✓[/] {name}{secs}"
         elif entry.state == "terminated":
             label = f"[red]✕[/] {name}"
