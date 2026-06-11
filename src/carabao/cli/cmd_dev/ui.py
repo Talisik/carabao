@@ -258,6 +258,22 @@ class UI(App):
     # ---- layout ----------------------------------------------------------
 
     def compose(self):
+        # Filters + search span the full width, above both panes.
+        with Horizontal(id="filters"):
+            for level in _LEVELS:
+                yield _Checkbox(level, value=True, name=level)
+
+            # Spacer pushes the display toggles to the top-right.
+            yield Static(id="filters-spacer")
+            for label, key in (
+                ("time", "show:time"),
+                ("lvl", "show:level"),
+                ("rich", "show:rich"),
+            ):
+                yield _Checkbox(label, value=True, name=key)
+
+        yield Input(placeholder="Search logs…", id="search")
+
         with Horizontal(id="body"):
             tree: Tree = Tree("Lanes", id="tree")
             tree.root.expand()
@@ -266,20 +282,6 @@ class UI(App):
             yield tree
 
             with Vertical(id="logs"):
-                with Horizontal(id="filters"):
-                    for level in _LEVELS:
-                        yield _Checkbox(level, value=True, name=level)
-
-                    # Spacer pushes the display toggles to the top-right.
-                    yield Static(id="filters-spacer")
-                    for label, key in (
-                        ("time", "show:time"),
-                        ("lvl", "show:level"),
-                        ("rich", "show:rich"),
-                    ):
-                        yield _Checkbox(label, value=True, name=key)
-
-                yield Input(placeholder="Search logs…", id="search")
                 # A Static inside a scroll: Static emits selection offsets (so
                 # text is selectable/copyable, unlike RichLog) and lets us
                 # render pretty, highlighted JSON.
@@ -581,8 +583,7 @@ class UI(App):
         if self._show_time:
             parts.append(Text(ts.strftime("%Y-%m-%d %H:%M:%S") + " ", style="bright_black"))
 
-        # DEBUG (lane lifecycle) stays unlabeled to cut noise; tag the rest.
-        if self._show_level and level != "DEBUG":
+        if self._show_level:
             color = _LEVEL_COLOR.get(level, "white")
             parts.append(Text(f"{level:<7} ", style=color))
 
