@@ -95,6 +95,7 @@ class NetworkWatcher(Lane):
             )
             return
 
+        NetworkWatcher._stop.clear()
         threading.Thread(
             target=self._watch,
             daemon=True,
@@ -112,9 +113,10 @@ class NetworkWatcher(Lane):
 
         prev = psutil.net_io_counters()
         prev_time = time.monotonic()
-        time.sleep(interval)
+        if NetworkWatcher._stop.wait(interval):
+            return
 
-        while True:
+        while not NetworkWatcher._stop.is_set():
             curr = psutil.net_io_counters()
             now = time.monotonic()
             elapsed = now - prev_time
@@ -140,4 +142,4 @@ class NetworkWatcher(Lane):
             elif NetworkWatcher.debug_logger:
                 NetworkWatcher.debug_logger(msg)
 
-            time.sleep(interval)
+            NetworkWatcher._stop.wait(interval)

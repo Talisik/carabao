@@ -18,14 +18,25 @@ from time import monotonic
 from typing import Callable, Dict, List, Optional, Tuple
 
 from l2l import events, logger
+from rich.console import Group
 from rich.highlighter import JSONHighlighter
+from rich.table import Table
 from rich.text import Text
 from textual import on
 from textual.app import App
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Checkbox, Input, Label, Static, Tree
+from textual.widgets import (
+    Button,
+    Checkbox,
+    Input,
+    Label,
+    Static,
+    TabbedContent,
+    TabPane,
+    Tree,
+)
 from textual.widgets.tree import TreeNode
 
 _JSON_HL = JSONHighlighter()
@@ -219,7 +230,12 @@ class UI(App):
     $accent: #3b82f6;
     Screen { background: transparent; }
     #body { height: 1fr; background: transparent; }
-    #tree { width: 25%; border-right: solid $accent; background: transparent; }
+    #left { width: 25%; border-right: solid $accent; background: transparent; }
+    #left Tabs { background: transparent; }
+    #left ContentSwitcher, #left TabPane { background: transparent; padding: 0; }
+    #tree { background: transparent; }
+    #env { background: transparent; }
+    #env-content { width: 1fr; height: auto; background: transparent; padding: 0 1; }
     #logs { width: 1fr; margin-left: 2; background: transparent; }
     #filters { height: auto; padding: 0 1; background: transparent; }
     #filters-spacer { width: 1fr; height: 1; background: transparent; }
@@ -240,10 +256,12 @@ class UI(App):
     #tree > .tree--highlight,
     #tree > .tree--highlight-line { background: transparent; text-style: none; }
 
-    /* Bottom bar: hotkeys (left) + run status (right), like a footer. */
+    /* Bottom bar: hotkeys (left) … mode + timer (right). */
     #bottombar { dock: bottom; height: 1; margin-top: 1; background: transparent; }
     #hotkeys { width: auto; color: $text-muted; }
-    #status { width: 1fr; content-align: right middle; color: $text-muted; }
+    #bottombar-spacer { width: 1fr; }
+    #mode { width: auto; margin-right: 2; }
+    #status { width: auto; color: $text-muted; }
     """
 
     BINDINGS = [
@@ -256,6 +274,8 @@ class UI(App):
         runner: Callable[[], None],
         title: str = "Lane UI",
         lanes: Optional[list] = None,
+        dev_mode: bool = True,
+        test_mode: bool = False,
     ):
         # ansi_color=True renders with the terminal's own ANSI palette + default
         # (transparent) background instead of a painted theme color. Must be
@@ -264,6 +284,8 @@ class UI(App):
         super().__init__(ansi_color=True)
         self._runner = runner
         self._run_title = title
+        self._dev_mode = dev_mode
+        self._test_mode = test_mode
         # Primary lane class(es) to pre-lay the structural tree from.
         self._structure_lanes = lanes or []
         # Tree state. _NodeState entries; structural nodes are pre-built from the
@@ -309,11 +331,19 @@ class UI(App):
         yield Input(placeholder="Search…", id="search")
 
         with Horizontal(id="body"):
-            tree: Tree = Tree("Lanes", id="tree")
-            tree.root.expand()
-            tree.root.allow_expand = False
-            self._tree = tree
-            yield tree
+            # Left pane: Lanes tree + Environment, in tabs.
+            with TabbedContent(id="left"):
+                with TabPane("Lanes", id="tab-lanes"):
+                    tree: Tree = Tree("Lanes", id="tree")
+                    tree.root.expand()
+                    tree.root.allow_expand = False
+                    self._tree = tree
+                    yield tree
+
+                with TabPane("Environment", id="tab-env"):
+                    with VerticalScroll(id="env"):
+                        self._env_static = Static(id="env-content")
+                        yield self._env_static
 
             with Vertical(id="logs"):
                 # A Static inside a scroll: Static emits selection offsets (so
@@ -324,12 +354,48 @@ class UI(App):
                     self._log_static = Static(id="log-content", markup=False)
                     yield self._log_static
 
-        # Bottom bar: hotkeys on the left, run status on the right.
+        # Bottom bar: hotkeys (left) … mode + timer (right).
         with Horizontal(id="bottombar"):
             self._hotkeys = Static(_HOTKEYS_RUNNING, id="hotkeys")
             yield self._hotkeys
+            yield Static(id="bottombar-spacer")
+            yield Static(self._mode_text(), id="mode")
             self._status_bar = Static("Running…", id="status")
             yield self._status_bar
+
+    def _mode_text(self) -> str:
+        parts = []
+        if self._dev_mode:
+            parts.append("[b yellow]DEV[/]")
+        else:
+            parts.append("[b green]RELEASE[/]")
+        if self._test_mode:
+            parts.append("[b blue]TEST[/]")
+        return "  ".join(parts)
+
+    def _refresh_env(self):
+        # Environment tab: the loaded .env file(s) + the env vars actually used.
+        try:
+            from fun_things.environment import mentioned_keys
+
+            from carabao.constants import C
+
+            files = getattr(C, "loaded_env_files", []) or []
+        except Exception:
+            return
+
+        header = Text()
+        header.append("env file: ", style="bright_black")
+        header.append(", ".join(files) if files else "—", style="bold #3b82f6")
+
+        table = Table(expand=True, show_edge=False, pad_edge=False)
+        table.add_column("KEY", style="cyan", no_wrap=True)
+        table.add_column("VALUE", overflow="fold")
+        for key in sorted(mentioned_keys):
+            value = mentioned_keys[key]
+            table.add_row(key, "—" if value is None else str(value))
+
+        self._env_static.update(Group(header, Text(), table))
 
     def on_mount(self):
         self.title = self._run_title
@@ -343,6 +409,8 @@ class UI(App):
         self._bridge_loguru()
         self._bridge_logging()
         self._build_structure()
+        self._refresh_env()
+        self.set_interval(1.0, self._refresh_env)
         self.set_interval(0.1, self._tick_spinner)
         self._start_monotonic = monotonic()
         self.set_interval(0.1, self._update_status)
@@ -463,6 +531,16 @@ class UI(App):
         finally:
             sys.stdout.flush()
             sys.stdout = prev_stdout
+
+        # Pipeline done — stop the background watchers so they don't keep
+        # logging after the run finishes.
+        try:
+            from carabao.lanes import NetworkWatcher, ResourceWatcher
+
+            ResourceWatcher.stop()
+            NetworkWatcher.stop()
+        except Exception:
+            pass
 
         elapsed = _fmt_elapsed(monotonic() - self._start_monotonic)
         if error_text is not None:

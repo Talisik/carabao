@@ -89,41 +89,30 @@ class Constants:
         to load from '.env.development' or '.env.release' first, and if neither
         exists, it defaults to loading from '.env'.
 
-        The method prints a message indicating which file was loaded.
+        Loaded files are recorded in ``loaded_env_files`` for the dev UI's
+        Environment tab.
         """
         if cls.__env:
             return
 
         cls.__env = True
 
-        result = []
         cls.loaded_env_files = []
 
         from ..core import Core
-        from ..style import style
 
         is_dev = Core.is_dev()
 
-        for filepath, styler in {
-            (".env.development" if is_dev else ".env.release"): (
-                style.black.on_yellow if is_dev else style.black.on_green
-            ),
-            ".env": style.black.on_white,
-        }.items():
+        for filepath in (
+            ".env.development" if is_dev else ".env.release",
+            ".env",
+        ):
             if not os.path.exists(filepath):
                 continue
 
             load_dotenv(filepath)
 
             cls.loaded_env_files.append(filepath)
-            result.append(styler(filepath))
-
-        # The dev UI shows this in its Environment tab instead.
-        if not Core.is_quiet():
-            print(
-                "Environment:",
-                " + ".join(result) + "\n",
-            )
 
     def load_all_properties(self):
         """
