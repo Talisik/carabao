@@ -144,9 +144,16 @@ class Core:
 
     @staticmethod
     def __has_primary(root, name: str) -> bool:
-        """Checks (without instantiating) if a registry has a matching primary lane."""
+        """Whether the registry has a matching ACTIVE primary lane for ``name``.
+
+        Mirrors ``start``'s own guard: passive lanes (e.g. the always-on
+        watchers, whose condition matches every name) don't count — otherwise a
+        purely-async queue would falsely look like it has sync lanes, and
+        ``Lane.start`` would then raise 'No lanes found'.
+        """
         return any(
-            lane.primary() and lane.condition(name) for lane in root.available_lanes()
+            lane.primary() and not lane.passive() and lane.condition(name)
+            for lane in root.available_lanes()
         )
 
     @staticmethod
