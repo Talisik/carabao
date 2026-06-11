@@ -133,9 +133,9 @@ def dev(
     # Run the program again.
 
     if result.visualizer:
-        from .cmd_dev.visualizer import Visualizer
+        from .cmd_dev.visualizer import UI
 
-        Visualizer(
+        UI(
             runner=lambda: Core.start(
                 name=result.name,
                 dev_mode=True,

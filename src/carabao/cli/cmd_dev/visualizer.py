@@ -8,15 +8,17 @@ Launched from the dev command when the "📊 Visualizer" switch is on.
 """
 
 import os
+import sys
 import threading
 from typing import Callable, Dict, List, Optional, Tuple
 
 from l2l import events, logger
+from rich.text import Text
 from textual import on
 from textual.app import App
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Checkbox, Footer, Header, Input, RichLog, Static, Tree
+from textual.widgets import Checkbox, Footer, Input, RichLog, Static, Tree
 from textual.widgets.tree import TreeNode
 
 _LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"]
@@ -25,8 +27,42 @@ _LEVEL_COLOR = {
     "INFO": "cyan",
     "WARNING": "yellow",
     "ERROR": "bold red",
+    "PRINT": "white",
 }
 _SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+
+class _LogWriter:
+    """File-like object that forwards complete lines to a log callback.
+
+    Used to capture lane ``print()`` output (which Textual would otherwise
+    swallow) and route it into the log pane.
+    """
+
+    def __init__(self, forward: Callable[[str, str], None], level: str = "PRINT"):
+        self._forward = forward
+        self._level = level
+        self._buffer = ""
+
+    def write(self, text) -> int:
+        text = str(text)
+        self._buffer += text
+
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            if line:
+                self._forward(self._level, line)
+
+        return len(text)
+
+    def flush(self):
+        if self._buffer.strip():
+            self._forward(self._level, self._buffer)
+
+        self._buffer = ""
+
+    def isatty(self) -> bool:
+        return False
 
 
 class _NodeState:
@@ -39,15 +75,17 @@ class _NodeState:
         self.duration: Optional[float] = None
 
 
-class Visualizer(App):
+class UI(App):
     """Runs ``runner`` in a worker thread and visualizes lane activity."""
 
     CSS = """
     #body { height: 1fr; }
-    #tree { width: 40%; border-right: solid $accent; }
+    #tree { width: 25%; border-right: solid $accent; }
     #logs { width: 1fr; }
     #filters { height: auto; padding: 0 1; }
-    #filters Checkbox { width: auto; margin-right: 1; }
+    #filters Checkbox { width: auto; height: 1; border: none; padding: 0; margin-right: 2; }
+    #filters Checkbox > .toggle--button { color: $panel; }
+    #filters Checkbox.-on > .toggle--button { color: $text-success; }
     #search { width: 1fr; }
     RichLog { height: 1fr; }
     #status { height: 1; background: $boost; padding: 0 1; }
@@ -56,7 +94,6 @@ class Visualizer(App):
     BINDINGS = [
         Binding("escape", "quit", "Quit", priority=True),
         Binding("q", "quit", "Quit"),
-        Binding("c", "clear_logs", "Clear logs"),
         Binding("slash", "focus_search", "Search"),
     ]
 
@@ -74,8 +111,6 @@ class Visualizer(App):
     # ---- layout ----------------------------------------------------------
 
     def compose(self):
-        yield Header(show_clock=True)
-
         with Horizontal(id="body"):
             tree: Tree = Tree("Lanes", id="tree")
             tree.root.expand()
@@ -154,6 +189,12 @@ class Visualizer(App):
     def _run_pipeline(self):
         message = "Done — press q to quit."
 
+        # Capture plain print() output (Textual otherwise swallows stdout) and
+        # route it into the log pane. l2l logs use the sink and loguru is
+        # bridged, so only stdout needs capturing.
+        prev_stdout = sys.stdout
+        sys.stdout = _LogWriter(self._on_log)
+
         try:
             self._runner()
         except SystemExit:
@@ -162,6 +203,9 @@ class Visualizer(App):
             pass
         except Exception as error:  # surface, don't crash the app
             message = f"Error: {error} — press q to quit."
+        finally:
+            sys.stdout.flush()
+            sys.stdout = prev_stdout
 
         # The app may already be shutting down; ignore if so.
         try:
@@ -175,7 +219,11 @@ class Visualizer(App):
         self.call_from_thread(self._apply_event, kind, payload)
 
     def _on_log(self, level: str, message: str):
-        self.call_from_thread(self._add_log, level, message)
+        # Worker thread → marshal to the UI; ignore if the app is gone.
+        try:
+            self.call_from_thread(self._add_log, level, message)
+        except Exception:
+            pass
 
     # ---- UI-thread handlers ---------------------------------------------
 
@@ -284,7 +332,11 @@ class Visualizer(App):
 
     def _write_record(self, level: str, message: str):
         color = _LEVEL_COLOR.get(level, "white")
-        self._richlog.write(f"[{color}]{level:<7}[/] {message}")
+        line = Text.assemble(
+            (f"{level:<7} ", color),
+            Text.from_ansi(message),  # render ANSI from print(), no markup injection
+        )
+        self._richlog.write(line)
 
     def _refilter(self):
         self._richlog.clear()
@@ -313,10 +365,6 @@ class Visualizer(App):
     def _on_search(self, event: Input.Changed):
         self._search = event.value
         self._refilter()
-
-    def action_clear_logs(self):
-        self._records.clear()
-        self._richlog.clear()
 
     def action_focus_search(self):
         self.query_one("#search", Input).focus()
