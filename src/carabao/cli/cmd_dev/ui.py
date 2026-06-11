@@ -14,6 +14,7 @@ import re
 import sys
 import threading
 from datetime import datetime
+from time import monotonic
 from typing import Callable, Dict, List, Optional, Tuple
 
 from l2l import events, logger
@@ -39,6 +40,15 @@ _MD_RE = re.compile(
     r"|(?P<italic>\*[^*\s][^*]*\*|(?<!\w)_[^_\s][^_]*_(?!\w))"
 )
 _MD_STYLE = {"code": "cyan", "bold": "bold", "strike": "strike", "italic": "italic"}
+
+
+def _fmt_elapsed(seconds: float) -> str:
+    """Compact elapsed time: 6.8s, 8m, 1h."""
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    if seconds < 3600:
+        return f"{int(seconds // 60)}m"
+    return f"{int(seconds // 3600)}h"
 
 
 def _abbrev_count(n: int) -> str:
@@ -312,6 +322,8 @@ class UI(App):
         self._bridge_loguru()
         self._bridge_logging()
         self.set_interval(0.1, self._tick_spinner)
+        self._start_monotonic = monotonic()
+        self.set_interval(0.1, self._update_status)
         # Daemon thread: the pipeline keeps running off the UI thread, and
         # quitting the app can't hang on a run-forever loop.
         self._worker = threading.Thread(target=self._run_pipeline, daemon=True)
@@ -410,7 +422,7 @@ class UI(App):
     # ---- worker ----------------------------------------------------------
 
     def _run_pipeline(self):
-        message = "Done"
+        error_text = None
 
         # Capture plain print() output (Textual otherwise swallows stdout) and
         # route it into the log pane. l2l logs use the sink and loguru is
@@ -425,10 +437,16 @@ class UI(App):
             # thread that just ends this worker, not the app.
             pass
         except Exception as error:  # surface, don't crash the app
-            message = f"Error: {error}"
+            error_text = str(error)
         finally:
             sys.stdout.flush()
             sys.stdout = prev_stdout
+
+        elapsed = _fmt_elapsed(monotonic() - self._start_monotonic)
+        if error_text is not None:
+            final = Text(f"  ✕ Error: {error_text}  ", style="bold white on red")
+        else:
+            final = Text(f"  ✓ Done · {elapsed}  ", style="bold black on green")
 
         self._finished = True
 
@@ -437,9 +455,16 @@ class UI(App):
             # Nothing is running anymore: stop any spinners left active by
             # generators that were abandoned before fully draining.
             self.call_from_thread(self._finalize_active)
-            self.call_from_thread(self._status_bar.update, message)
+            self.call_from_thread(self._status_bar.update, final)
         except Exception:
             pass
+
+    def _update_status(self):
+        # Live elapsed timer while running; the final ✓/✕ is set on completion.
+        if self._finished:
+            return
+        elapsed = _fmt_elapsed(monotonic() - self._start_monotonic)
+        self._status_bar.update(Text(f"  ⏱ {elapsed}  ", style="bold black on yellow"))
 
     def _finalize_active(self):
         for run_id in list(self._active):
