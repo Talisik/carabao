@@ -65,6 +65,7 @@ def _inline_markdown(text: str) -> Text:
 
     return out
 
+
 # Noisy third-party loggers muted to WARNING while the UI runs, so the root
 # logger can be DEBUG (to surface the user's own logs) without flooding the
 # pane (e.g. pymongo command monitoring emits DEBUG JSON per operation).
@@ -272,7 +273,7 @@ class UI(App):
             ):
                 yield _Checkbox(label, value=True, name=key)
 
-        yield Input(placeholder="Search logs…", id="search")
+        yield Input(placeholder="Search…", id="search")
 
         with Horizontal(id="body"):
             tree: Tree = Tree("Lanes", id="tree")
@@ -581,13 +582,17 @@ class UI(App):
         parts: List[Text] = []
 
         if self._show_time:
-            parts.append(Text(ts.strftime("%Y-%m-%d %H:%M:%S") + " ", style="bright_black"))
+            parts.append(
+                Text(ts.strftime("%Y-%m-%d %H:%M:%S") + " ", style="bright_black")
+            )
 
         if self._show_level:
             color = _LEVEL_COLOR.get(level, "white")
             parts.append(Text(f"{level:<7} ", style=color))
 
-        body = self._render_body(message) if self._show_rich else Text.from_ansi(message)
+        body = (
+            self._render_body(message) if self._show_rich else Text.from_ansi(message)
+        )
         parts.append(body)
         return Text.assemble(*parts)
 
@@ -655,6 +660,12 @@ class UI(App):
     def _on_search(self, event: Input.Changed):
         self._search = event.value
         self._refilter()
+
+    @on(Tree.NodeCollapsed, "#tree")
+    def _keep_tree_expanded(self, event: Tree.NodeCollapsed):
+        # Keep the collapse triangle visible but don't actually collapse —
+        # re-expand any node the user tries to collapse.
+        event.node.expand()
 
     def action_focus_search(self):
         self.query_one("#search", Input).focus()
