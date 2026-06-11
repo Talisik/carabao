@@ -18,9 +18,7 @@ from time import monotonic
 from typing import Callable, Dict, List, Optional, Tuple
 
 from l2l import events, logger
-from rich.console import Group
 from rich.highlighter import JSONHighlighter
-from rich.table import Table
 from rich.text import Text
 from textual import on
 from textual.app import App
@@ -30,6 +28,7 @@ from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
     Checkbox,
+    DataTable,
     Input,
     Label,
     Static,
@@ -235,7 +234,13 @@ class UI(App):
     #left ContentSwitcher, #left TabPane { background: transparent; padding: 0; }
     #tree { background: transparent; }
     #env { background: transparent; }
-    #env-content { width: 1fr; height: auto; background: transparent; padding: 0 1; }
+    #env-file { width: 1fr; height: auto; background: transparent; padding: 0 1; }
+    #env-table { width: 1fr; height: auto; background: transparent; }
+    #env-table > .datatable--header { background: transparent; color: $accent; text-style: bold; }
+    #env-table > .datatable--cursor { background: transparent; }
+    #env-table > .datatable--hover { background: transparent; }
+    #env-table > .datatable--even-row,
+    #env-table > .datatable--odd-row { background: transparent; }
     #logs { width: 1fr; margin-left: 2; background: transparent; }
     #filters { height: auto; padding: 0 1; background: transparent; }
     #filters-spacer { width: 1fr; height: 1; background: transparent; }
@@ -308,7 +313,7 @@ class UI(App):
         self._show_level = True
         self._show_rich = True
         self._autoscroll = True
-        self._show_tree = True
+        self._show_panel = True
         self._finished = False
 
     # ---- layout ----------------------------------------------------------
@@ -320,7 +325,7 @@ class UI(App):
             # Spacer pushes the display toggles to the top-right.
             yield Static(id="filters-spacer")
             for label, key in (
-                ("tree", "show:tree"),
+                ("panel", "show:panel"),
                 ("time", "show:time"),
                 ("lvl", "show:level"),
                 ("rich", "show:rich"),
@@ -332,7 +337,8 @@ class UI(App):
 
         with Horizontal(id="body"):
             # Left pane: Lanes tree + Environment, in tabs.
-            with TabbedContent(id="left"):
+            self._left = TabbedContent(id="left")
+            with self._left:
                 with TabPane("Lanes", id="tab-lanes"):
                     tree: Tree = Tree("Lanes", id="tree")
                     tree.root.expand()
@@ -342,8 +348,17 @@ class UI(App):
 
                 with TabPane("Environment", id="tab-env"):
                     with VerticalScroll(id="env"):
-                        self._env_static = Static(id="env-content")
-                        yield self._env_static
+                        self._env_file = Static(id="env-file")
+                        yield self._env_file
+                        table: DataTable = DataTable(
+                            id="env-table",
+                            zebra_stripes=False,
+                            cursor_type="none",
+                        )
+                        table.add_column("KEY")
+                        table.add_column("VALUE")
+                        self._env_table = table
+                        yield table
 
             with Vertical(id="logs"):
                 # A Static inside a scroll: Static emits selection offsets (so
@@ -387,15 +402,16 @@ class UI(App):
         header = Text()
         header.append("env file: ", style="bright_black")
         header.append(", ".join(files) if files else "—", style="bold #3b82f6")
+        self._env_file.update(header)
 
-        table = Table(expand=True, show_edge=False, pad_edge=False)
-        table.add_column("KEY", style="cyan", no_wrap=True)
-        table.add_column("VALUE", overflow="fold")
+        table = self._env_table
+        table.clear()
         for key in sorted(mentioned_keys):
             value = mentioned_keys[key]
-            table.add_row(key, "—" if value is None else str(value))
-
-        self._env_static.update(Group(header, Text(), table))
+            table.add_row(
+                Text(key, style="cyan"),
+                Text("—" if value is None else str(value)),
+            )
 
     def on_mount(self):
         self.title = self._run_title
@@ -831,9 +847,9 @@ class UI(App):
                 self._show_rich = event.value
             elif option == "scroll":
                 self._autoscroll = event.value
-            elif option == "tree":
-                self._show_tree = event.value
-                self._tree.display = event.value
+            elif option == "panel":
+                self._show_panel = event.value
+                self._left.display = event.value
             self._render_log()
             return
 
