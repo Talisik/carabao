@@ -10,8 +10,10 @@ Launched from the dev command when the "📊 UI" switch is on.
 import json
 import logging
 import os
+import re
 import sys
 import threading
+from datetime import datetime
 from typing import Callable, Dict, List, Optional, Tuple
 
 from l2l import events, logger
@@ -27,6 +29,56 @@ from textual.widgets.tree import TreeNode
 
 _JSON_HL = JSONHighlighter()
 _MAX_LINES = 2000  # cap rendered log entries to keep rebuilds snappy
+
+# Inline markdown: `code`, **bold**, ~~strike~~, *italic* / _italic_.
+_MD_RE = re.compile(
+    r"(?P<code>`[^`]+`)"
+    r"|(?P<bold>\*\*[^*]+\*\*)"
+    r"|(?P<strike>~~[^~]+~~)"
+    # underscore italics require word boundaries so path/to_file_name is safe
+    r"|(?P<italic>\*[^*\s][^*]*\*|(?<!\w)_[^_\s][^_]*_(?!\w))"
+)
+_MD_STYLE = {"code": "cyan", "bold": "bold", "strike": "strike", "italic": "italic"}
+
+
+def _inline_markdown(text: str) -> Text:
+    """Render inline markdown (bold/italic/code/strike) as styled Text.
+
+    Block markdown is intentionally not handled — keeps the log selectable and
+    avoids mangling plain log lines.
+    """
+    out = Text()
+    pos = 0
+
+    for match in _MD_RE.finditer(text):
+        if match.start() > pos:
+            out.append(text[pos : match.start()])
+
+        kind = match.lastgroup
+        token = match.group()
+        inner = token[1:-1] if kind in ("code", "italic") else token[2:-2]
+        out.append(inner, style=_MD_STYLE[kind])
+        pos = match.end()
+
+    if pos < len(text):
+        out.append(text[pos:])
+
+    return out
+
+# Noisy third-party loggers muted to WARNING while the UI runs, so the root
+# logger can be DEBUG (to surface the user's own logs) without flooding the
+# pane (e.g. pymongo command monitoring emits DEBUG JSON per operation).
+_NOISY_LOGGERS = (
+    "pymongo",
+    "urllib3",
+    "asyncio",
+    "elasticsearch",
+    "elastic_transport",
+    "botocore",
+    "s3transfer",
+    "kafka",
+    "redis",
+)
 
 _LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"]
 _LEVEL_COLOR = {
@@ -155,6 +207,7 @@ class UI(App):
     #tree { width: 25%; border-right: solid $accent; background: transparent; }
     #logs { width: 1fr; margin-left: 2; background: transparent; }
     #filters { height: auto; padding: 0 1; background: transparent; }
+    #filters-spacer { width: 1fr; height: 1; background: transparent; }
     #filters Checkbox { width: auto; height: 1; border: none; padding: 0; margin-right: 2; background: transparent; }
     #filters Checkbox > .toggle--button { background: transparent; color: $panel; }
     #filters Checkbox.-on > .toggle--button { background: transparent; color: $text-success; }
@@ -192,10 +245,14 @@ class UI(App):
         self._run_title = title
         self._lane_nodes: Dict[int, _NodeState] = {}
         self._active: set = set()
-        self._records: List[Tuple[str, str]] = []
+        self._records: List[Tuple[datetime, str, str]] = []
         self._enabled_levels: set = set(_LEVELS)
         self._search: str = ""
         self._frame = 0
+        # Display toggles (top-right of the log pane).
+        self._show_time = True
+        self._show_level = True
+        self._show_rich = True
         self._finished = False
 
     # ---- layout ----------------------------------------------------------
@@ -212,6 +269,15 @@ class UI(App):
                 with Horizontal(id="filters"):
                     for level in _LEVELS:
                         yield _Checkbox(level, value=True, name=level)
+
+                    # Spacer pushes the display toggles to the top-right.
+                    yield Static(id="filters-spacer")
+                    for label, key in (
+                        ("time", "show:time"),
+                        ("lvl", "show:level"),
+                        ("rich", "show:rich"),
+                    ):
+                        yield _Checkbox(label, value=True, name=key)
 
                 yield Input(placeholder="Search logs…", id="search")
                 # A Static inside a scroll: Static emits selection offsets (so
@@ -263,6 +329,10 @@ class UI(App):
             root.removeHandler(self._logging_handler)
             for handler in getattr(self, "_detached_handlers", []):
                 root.addHandler(handler)
+            if hasattr(self, "_prev_root_level"):
+                root.setLevel(self._prev_root_level)
+            for name, level in getattr(self, "_muted_levels", {}).items():
+                logging.getLogger(name).setLevel(level)
 
         if hasattr(self, "_prev_stream"):
             logger.set_stream(self._prev_stream)
@@ -304,10 +374,17 @@ class UI(App):
         self._logging_handler.setLevel(logging.NOTSET)
 
         root = logging.getLogger()
-        # Do NOT lower the root level: leave it as configured so the UI shows the
-        # same records you'd see with the UI off. Forcing DEBUG here surfaced
-        # noisy third-party logs (e.g. pymongo command monitoring). l2l/loguru
-        # debug still flows via their own bridges.
+        # Root → DEBUG so the user's own loggers (which inherit root's level)
+        # surface in the pane. Mute known-noisy libraries individually so this
+        # doesn't flood the log (e.g. pymongo command monitoring).
+        self._prev_root_level = root.level
+        root.setLevel(logging.DEBUG)
+        self._muted_levels = {}
+        for name in _NOISY_LOGGERS:
+            noisy = logging.getLogger(name)
+            self._muted_levels[name] = noisy.level
+            noisy.setLevel(logging.WARNING)
+
         self._detached_handlers = [
             h for h in list(root.handlers) if isinstance(h, logging.StreamHandler)
         ]
@@ -480,7 +557,7 @@ class UI(App):
             self._render_node(run_id)
 
     def _add_log(self, level: str, message: str):
-        self._records.append((level, message))
+        self._records.append((datetime.now(), level, message))
 
         if len(self._records) > _MAX_LINES:
             del self._records[: len(self._records) - _MAX_LINES]
@@ -498,10 +575,20 @@ class UI(App):
 
         return True
 
-    def _render_record(self, level: str, message: str) -> Text:
-        color = _LEVEL_COLOR.get(level, "white")
-        prefix = Text(f"{level:<7} ", style=color)
-        return Text.assemble(prefix, self._render_body(message))
+    def _render_record(self, ts: datetime, level: str, message: str) -> Text:
+        parts: List[Text] = []
+
+        if self._show_time:
+            parts.append(Text(ts.strftime("%Y-%m-%d %H:%M:%S") + " ", style="bright_black"))
+
+        # DEBUG (lane lifecycle) stays unlabeled to cut noise; tag the rest.
+        if self._show_level and level != "DEBUG":
+            color = _LEVEL_COLOR.get(level, "white")
+            parts.append(Text(f"{level:<7} ", style=color))
+
+        body = self._render_body(message) if self._show_rich else Text.from_ansi(message)
+        parts.append(body)
+        return Text.assemble(*parts)
 
     def _render_body(self, message: str) -> Text:
         # Pretty-print + syntax-highlight JSON payloads; otherwise keep ANSI.
@@ -517,12 +604,16 @@ class UI(App):
                 _JSON_HL.highlight(pretty)
                 return pretty
 
-        return Text.from_ansi(message)
+        # Keep ANSI from print() as-is; otherwise apply inline markdown.
+        if "\x1b" in message:
+            return Text.from_ansi(message)
+
+        return _inline_markdown(message)
 
     def _render_log(self):
         lines = [
-            self._render_record(level, message)
-            for level, message in self._records
+            self._render_record(ts, level, message)
+            for ts, level, message in self._records
             if self._passes_filter(level, message)
         ]
         self._log_static.update(Text("\n").join(lines) if lines else Text(""))
@@ -535,15 +626,27 @@ class UI(App):
 
     @on(Checkbox.Changed)
     def _on_checkbox(self, event: Checkbox.Changed):
-        level = event.checkbox.name
+        name = event.checkbox.name
 
-        if level is None:
+        if name is None:
+            return
+
+        # Display toggles (top-right) vs level filters.
+        if name.startswith("show:"):
+            option = name.split(":", 1)[1]
+            if option == "time":
+                self._show_time = event.value
+            elif option == "level":
+                self._show_level = event.value
+            elif option == "rich":
+                self._show_rich = event.value
+            self._render_log()
             return
 
         if event.value:
-            self._enabled_levels.add(level)
+            self._enabled_levels.add(name)
         else:
-            self._enabled_levels.discard(level)
+            self._enabled_levels.discard(name)
 
         self._refilter()
 
