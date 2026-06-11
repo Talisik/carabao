@@ -122,7 +122,6 @@ class Display(App[Result]):
             )
 
             self.sub_lanes_widget = Tree("", id="process-tree")
-            self.sub_lanes_widget.show_cursor = False
 
             yield self.sub_lanes_widget
 

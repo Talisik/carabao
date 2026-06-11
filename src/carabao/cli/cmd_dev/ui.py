@@ -74,9 +74,14 @@ def _inline_markdown(text: str) -> Text:
 
         kind = match.lastgroup
         token = match.group()
+        pos = match.end()
+
+        if kind is None:  # shouldn't happen (a named group always matches)
+            out.append(token)
+            continue
+
         inner = token[1:-1] if kind in ("code", "italic") else token[2:-2]
         out.append(inner, style=_MD_STYLE[kind])
-        pos = match.end()
 
     if pos < len(text):
         out.append(text[pos:])
@@ -228,6 +233,7 @@ class UI(App):
     #tree > .tree--guides,
     #tree > .tree--guides-hover,
     #tree > .tree--guides-selected { color: $accent; text-style: none; }
+    #tree > .tree--cursor,
     #tree > .tree--highlight,
     #tree > .tree--highlight-line { background: transparent; text-style: none; }
 
@@ -291,7 +297,6 @@ class UI(App):
             tree: Tree = Tree("Lanes", id="tree")
             tree.root.expand()
             tree.root.allow_expand = False
-            tree.show_cursor = False
             self._tree = tree
             yield tree
 

@@ -72,6 +72,7 @@ Tree {
     text-style: none;
 }
 
+#process-tree > .tree--cursor,
 #process-tree > .tree--highlight,
 #process-tree > .tree--highlight-line {
     background: transparent;
