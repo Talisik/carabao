@@ -165,10 +165,8 @@ class UI(App):
     #filters Checkbox { width: auto; height: 1; border: none; padding: 0; margin-right: 2; background: transparent; }
     #filters Checkbox > .toggle--button { background: transparent; color: $panel; }
     #filters Checkbox.-on > .toggle--button { background: transparent; color: $text-success; }
-    #search { width: 1fr; background: $surface; border: none; }
-    /* Solid background: a transparent scrolling RichLog leaves stale cells that
-       bleed onto the widgets above it (Textual compositor quirk). */
-    RichLog { height: 1fr; background: $surface; }
+    #search { width: 1fr; background: transparent; border: none; height: 3; content-align: left middle; }
+    RichLog { height: 1fr; background: transparent; }
     Tree { background: transparent; }
 
     /* Live tree: guides always visible, no hover/cursor line highlight. */
