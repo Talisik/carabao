@@ -444,9 +444,9 @@ class UI(App):
 
         elapsed = _fmt_elapsed(monotonic() - self._start_monotonic)
         if error_text is not None:
-            final = Text(f"  ✕ Error: {error_text}  ", style="bold white on red")
+            final = Text(f"Error: {error_text}", style="bold red")
         else:
-            final = Text(f"  ✓ Done · {elapsed}  ", style="bold black on green")
+            final = Text(f"Done in {elapsed}", style="bold green")
 
         self._finished = True
 
@@ -464,7 +464,7 @@ class UI(App):
         if self._finished:
             return
         elapsed = _fmt_elapsed(monotonic() - self._start_monotonic)
-        self._status_bar.update(Text(f"  ⏱ {elapsed}  ", style="bold black on yellow"))
+        self._status_bar.update(Text(elapsed, style="bold yellow"))
 
     def _finalize_active(self):
         for run_id in list(self._active):
