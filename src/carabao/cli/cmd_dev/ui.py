@@ -94,25 +94,26 @@ class UI(App):
     """Runs ``runner`` in a worker thread and visualizes lane activity."""
 
     CSS = """
-    #body { height: 1fr; }
-    #tree { width: 25%; border-right: solid $accent; }
-    #logs { width: 1fr; }
-    #filters { height: auto; padding: 0 1; }
-    #filters Checkbox { width: auto; height: 1; border: none; padding: 0; margin-right: 2; }
+    Screen { background: transparent; }
+    #body { height: 1fr; background: transparent; }
+    #tree { width: 25%; border-right: solid $accent; background: transparent; }
+    #logs { width: 1fr; background: transparent; }
+    #filters { height: auto; padding: 0 1; background: transparent; }
+    #filters Checkbox { width: auto; height: 1; border: none; padding: 0; margin-right: 2; background: transparent; }
     #filters Checkbox > .toggle--button { color: $panel; }
     #filters Checkbox.-on > .toggle--button { color: $text-success; }
-    #search { width: 1fr; }
-    RichLog { height: 1fr; }
-    #status { height: 1; background: $boost; padding: 0 1; }
+    #search { width: 1fr; background: transparent; }
+    RichLog { height: 1fr; background: transparent; }
+    Tree { background: transparent; }
+    #status { height: 1; padding: 0 1; background: transparent; }
     """
 
     BINDINGS = [
         Binding("escape", "quit", "Quit", priority=True),
-        Binding("q", "quit", "Quit"),
         Binding("slash", "focus_search", "Search"),
     ]
 
-    def __init__(self, runner: Callable[[], None], title: str = "Lane Visualizer"):
+    def __init__(self, runner: Callable[[], None], title: str = "Lane UI"):
         super().__init__()
         self._runner = runner
         self._run_title = title
@@ -146,8 +147,10 @@ class UI(App):
                 )
                 yield self._richlog
 
-        self._status_bar = Static("Starting…", id="status")
-        yield self._status_bar
+                # Progress/status sits below the log pane.
+                self._status_bar = Static("Starting…", id="status")
+                yield self._status_bar
+
         yield Footer()
 
     def on_mount(self):
@@ -220,7 +223,7 @@ class UI(App):
     # ---- worker ----------------------------------------------------------
 
     def _run_pipeline(self):
-        message = "Done — press q to quit."
+        message = "Done — press esc to quit."
 
         # Capture plain print() output (Textual otherwise swallows stdout) and
         # route it into the log pane. l2l logs use the sink and loguru is
@@ -235,16 +238,27 @@ class UI(App):
             # thread that just ends this worker, not the app.
             pass
         except Exception as error:  # surface, don't crash the app
-            message = f"Error: {error} — press q to quit."
+            message = f"Error: {error} — press esc to quit."
         finally:
             sys.stdout.flush()
             sys.stdout = prev_stdout
 
         # The app may already be shutting down; ignore if so.
         try:
+            # Nothing is running anymore: stop any spinners left active by
+            # generators that were abandoned before fully draining.
+            self.call_from_thread(self._finalize_active)
             self.call_from_thread(self._status_bar.update, message)
         except Exception:
             pass
+
+    def _finalize_active(self):
+        for run_id in list(self._active):
+            entry = self._lane_nodes.get(run_id)
+            if entry is not None and entry.state == "active":
+                entry.state = "done"
+            self._active.discard(run_id)
+            self._render_node(run_id)
 
     # ---- l2l callbacks (fire on the worker thread) -----------------------
 

@@ -133,7 +133,7 @@ def dev(
     # Run the program again.
 
     if result.visualizer:
-        from .cmd_dev.visualizer import UI
+        from .cmd_dev.ui import UI
 
         UI(
             runner=lambda: Core.start(
