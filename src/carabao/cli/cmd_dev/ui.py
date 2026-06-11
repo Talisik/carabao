@@ -20,7 +20,7 @@ from textual.app import App
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Checkbox, Footer, Input, Label, RichLog, Static, Tree
+from textual.widgets import Button, Checkbox, Input, Label, RichLog, Static, Tree
 from textual.widgets.tree import TreeNode
 
 _LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"]
@@ -79,6 +79,25 @@ class _LoggingHandler(logging.Handler):
             self._forward(record.levelname, record.getMessage())
         except Exception:
             pass
+
+
+class _SelectableRichLog(RichLog):
+    """RichLog that supports mouse text selection + copy (Ctrl+C).
+
+    RichLog is a ScrollView (a container), so Textual disables selection on it
+    by default, and its Strip-based render isn't extractable by the base
+    ``get_selection``. This re-enables both.
+    """
+
+    @property
+    def allow_select(self) -> bool:
+        return True
+
+    def get_selection(self, selection):
+        # Build the full text from the rendered lines and let the Selection
+        # extract the highlighted span.
+        text = "\n".join(strip.text for strip in self.lines)
+        return selection.extract(text), "\n"
 
 
 class _ConfirmQuit(ModalScreen[bool]):
@@ -145,10 +164,21 @@ class UI(App):
     #filters Checkbox { width: auto; height: 1; border: none; padding: 0; margin-right: 2; background: transparent; }
     #filters Checkbox > .toggle--button { background: transparent; color: $panel; }
     #filters Checkbox.-on > .toggle--button { background: transparent; color: $text-success; }
-    #search { width: 1fr; background: $surface; }
+    #search { width: 1fr; background: $surface; border: none; }
     RichLog { height: 1fr; background: transparent; }
     Tree { background: transparent; }
-    #status { height: 1; padding: 0 1; margin-top: 1; background: transparent; }
+
+    /* Live tree: guides always visible, no hover/cursor line highlight. */
+    #tree > .tree--guides,
+    #tree > .tree--guides-hover,
+    #tree > .tree--guides-selected { color: $accent; text-style: none; }
+    #tree > .tree--highlight,
+    #tree > .tree--highlight-line { background: transparent; text-style: none; }
+
+    /* Bottom bar: hotkeys (left) + run status (right), like a footer. */
+    #bottombar { dock: bottom; height: 1; background: transparent; }
+    #hotkeys { width: auto; color: $text-muted; }
+    #status { width: 1fr; content-align: right middle; color: $text-muted; }
     """
 
     BINDINGS = [
@@ -178,6 +208,7 @@ class UI(App):
         with Horizontal(id="body"):
             tree: Tree = Tree("Lanes", id="tree")
             tree.root.expand()
+            tree.show_cursor = False
             self._tree = tree
             yield tree
 
@@ -187,7 +218,7 @@ class UI(App):
                         yield Checkbox(level, value=True, name=level)
 
                 yield Input(placeholder="Search logs…", id="search")
-                self._richlog = RichLog(
+                self._richlog = _SelectableRichLog(
                     highlight=True,
                     markup=True,
                     wrap=False,
@@ -195,11 +226,11 @@ class UI(App):
                 )
                 yield self._richlog
 
-                # Progress/status sits below the log pane.
-                self._status_bar = Static("Starting…", id="status")
-                yield self._status_bar
-
-        yield Footer()
+        # Bottom bar: hotkeys on the left, run status on the right.
+        with Horizontal(id="bottombar"):
+            yield Static("[b]esc[/] quit   [b]/[/] search", id="hotkeys")
+            self._status_bar = Static("Starting…", id="status")
+            yield self._status_bar
 
     def on_mount(self):
         self.title = self._run_title
@@ -271,7 +302,7 @@ class UI(App):
     # ---- worker ----------------------------------------------------------
 
     def _run_pipeline(self):
-        message = "Done — press esc to quit."
+        message = "Done"
 
         # Capture plain print() output (Textual otherwise swallows stdout) and
         # route it into the log pane. l2l logs use the sink and loguru is
@@ -286,7 +317,7 @@ class UI(App):
             # thread that just ends this worker, not the app.
             pass
         except Exception as error:  # surface, don't crash the app
-            message = f"Error: {error} — press esc to quit."
+            message = f"Error: {error}"
         finally:
             sys.stdout.flush()
             sys.stdout = prev_stdout

@@ -21,6 +21,11 @@ ListItem {
     background: transparent;
 }
 
+/* Keep a background on the selected/highlighted queue item. */
+#lanes > ListItem.-highlight {
+    background: $accent;
+}
+
 Button:focus {
     text-style: bold;
 }
@@ -55,6 +60,21 @@ Tree {
     background: transparent;
 }
 
+/* Process tree: guide lines always visible (consistent color, no hover
+   change); no hover/cursor line highlight. */
+#process-tree > .tree--guides,
+#process-tree > .tree--guides-hover,
+#process-tree > .tree--guides-selected {
+    color: $accent;
+    text-style: none;
+}
+
+#process-tree > .tree--highlight,
+#process-tree > .tree--highlight-line {
+    background: transparent;
+    text-style: none;
+}
+
 TabbedContent, TabPane, ContentSwitcher {
     background: transparent;
 }
@@ -65,18 +85,18 @@ TabbedContent, TabPane, ContentSwitcher {
     padding: 0 3;
 }
 
-/* ANSI named colors render solid in ansi_color mode (theme hex collapses to
-   transparent there). */
+/* Solid, pleasant shades (truecolor passes through in ansi_color mode since
+   the ANSI->truecolor filter is disabled). */
 #run {
     width: 30%;
-    background: green;
+    background: #3fb950;
     color: auto;
 }
 
 #exit {
     width: 20%;
     dock: right;
-    background: red;
+    background: #f85149;
     color: auto;
 }
 
