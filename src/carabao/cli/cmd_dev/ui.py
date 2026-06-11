@@ -256,17 +256,20 @@ class UI(App):
         events.unsubscribe(self._on_event)
         logger.remove_sink(self._on_log)
 
-        if getattr(self, "_loguru_id", None) is not None:
+        if getattr(self, "_loguru_removed", False):
             try:
                 from loguru import logger as loguru_logger
 
-                loguru_logger.remove(self._loguru_id)
+                loguru_logger.remove()  # remove our sink
+                loguru_logger.add(sys.stderr)  # restore a default handler
             except Exception:
                 pass
 
         if getattr(self, "_logging_handler", None) is not None:
             root = logging.getLogger()
             root.removeHandler(self._logging_handler)
+            for handler in getattr(self, "_detached_handlers", []):
+                root.addHandler(handler)
             root.setLevel(self._prev_root_level)
 
         if hasattr(self, "_prev_stream"):
@@ -276,8 +279,15 @@ class UI(App):
             self._null.close()
 
     def _bridge_loguru(self):
-        """Mirror loguru output (carabao/user lanes) into the log pane."""
+        """Route loguru output (carabao/user lanes) into the log pane only.
+
+        loguru's default handler writes to the real stderr (captured at import,
+        so it bypasses Textual's redirect) and paints over the TUI. Remove all
+        loguru handlers for the duration, add our sink, and restore a default
+        stderr handler on unmount.
+        """
         self._loguru_id = None
+        self._loguru_removed = False
 
         try:
             from loguru import logger as loguru_logger
@@ -286,17 +296,28 @@ class UI(App):
                 record = message.record
                 self._on_log(record["level"].name, record["message"])
 
+            loguru_logger.remove()  # drop the default stderr handler
+            self._loguru_removed = True
             self._loguru_id = loguru_logger.add(sink, level="DEBUG")
         except Exception:
             pass
 
     def _bridge_logging(self):
-        """Mirror stdlib ``logging`` (user lanes / libraries) into the log pane."""
+        """Mirror stdlib ``logging`` (user lanes / libraries) into the log pane.
+
+        Also detach existing root StreamHandlers (they write to the real
+        stderr/stdout and would paint over the TUI); restored on unmount.
+        """
         self._logging_handler = _LoggingHandler(self._on_log)
         self._logging_handler.setLevel(logging.DEBUG)
 
         root = logging.getLogger()
         self._prev_root_level = root.level
+        self._detached_handlers = [
+            h for h in list(root.handlers) if isinstance(h, logging.StreamHandler)
+        ]
+        for handler in self._detached_handlers:
+            root.removeHandler(handler)
         # Lower the root level so DEBUG/INFO records reach the handler; restored
         # on unmount.
         root.setLevel(logging.DEBUG)
