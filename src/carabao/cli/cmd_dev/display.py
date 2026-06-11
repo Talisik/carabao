@@ -38,7 +38,7 @@ class Result:
     test_mode: bool
     form: dict[str, Any]
     raw_form: dict[str, str]
-    visualizer: bool = False
+    ui: bool = False
 
 
 class Display(App[Result]):
@@ -53,6 +53,10 @@ class Display(App[Result]):
     )
 
     lane_list: ListView
+
+    def on_mount(self):
+        # Use the terminal's ANSI palette + default (transparent) background.
+        self.theme = "textual-ansi"
 
     def __compose_lane_list(self):
         try:
@@ -140,12 +144,12 @@ class Display(App[Result]):
         with Horizontal(
             classes="switch",
         ):
-            self.visualizer = Switch(
-                SECRET_CFG.visualizer,
+            self.ui = Switch(
+                SECRET_CFG.ui,
             )
 
-            yield self.visualizer
-            yield Label("📊 Visualizer")
+            yield self.ui
+            yield Label("📊 UI")
 
         yield Button.error(
             "\\[Esc] Exit",
@@ -484,7 +488,7 @@ class MyLane(Lane):
                 test_mode=self.test_mode.value,
                 form={name: field[1](field[0]) for name, field in _form.items()},
                 raw_form={name: field[0] for name, field in _form.items()},
-                visualizer=self.visualizer.value,
+                ui=self.ui.value,
             ),
         )
 

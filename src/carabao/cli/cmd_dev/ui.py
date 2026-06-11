@@ -1,10 +1,10 @@
-"""Live lane visualizer for dev mode.
+"""Live lane UI for dev mode.
 
 A Textual app that runs the pipeline in a worker thread and shows, in real
 time, which lane is active (a tree fed by ``l2l.events``) alongside a
 searchable/filterable log pane (fed by ``l2l.logger`` via a sink).
 
-Launched from the dev command when the "📊 Visualizer" switch is on.
+Launched from the dev command when the "📊 UI" switch is on.
 """
 
 import logging
@@ -105,7 +105,7 @@ class UI(App):
     #search { width: 1fr; background: transparent; }
     RichLog { height: 1fr; background: transparent; }
     Tree { background: transparent; }
-    #status { height: 1; padding: 0 1; background: transparent; }
+    #status { height: 1; padding: 0 1; margin-top: 1; background: transparent; }
     """
 
     BINDINGS = [
@@ -155,6 +155,10 @@ class UI(App):
 
     def on_mount(self):
         self.title = self._run_title
+        # Use the terminal's own ANSI palette + default background, so the panes
+        # show the real terminal background (transparency) instead of a theme
+        # color. Combined with the `background: transparent` rules above.
+        self.theme = "textual-ansi"
         # Route logs to the pane only; silence the console stream so it can't
         # corrupt the TUI. Restored on unmount.
         self._null = open(os.devnull, "w")
@@ -307,21 +311,40 @@ class UI(App):
             return
 
         if kind == "lane_started":
+            # Generator entered — create the node as pending. (These bunch up
+            # at the start of the run; activity is tracked via lane_active.)
             entry = self._ensure_node(
                 run_id,
                 payload.get("name"),
                 payload.get("parent_id"),
             )
+            if entry.state == "pending":
+                self._render_node(run_id)
+
+        elif kind == "lane_active":
+            # A process() call is running now — exactly one lane at a time, in
+            # real execution order. This drives the spinner truthfully.
+            entry = self._ensure_node(run_id, payload.get("name"), None)
             entry.state = "active"
             self._active.add(run_id)
             self._render_node(run_id)
 
+        elif kind == "lane_idle":
+            entry = self._ensure_node(run_id, payload.get("name"), None)
+            entry.state = "done"
+            entry.work = payload.get("work")
+            self._active.discard(run_id)
+            self._render_node(run_id)
+
         elif kind == "lane_done":
             entry = self._ensure_node(run_id, payload.get("name"), None)
-            entry.state = "terminated" if payload.get("terminated") else "done"
-            # 'work' = truthful self-compute time (wall-clock 'duration' bunches
-            # up at pipeline drain for streaming lanes).
-            entry.work = payload.get("work")
+            if payload.get("terminated"):
+                entry.state = "terminated"
+            elif entry.state != "active":
+                entry.state = "done"
+            # 'work' = truthful self-compute time.
+            if payload.get("work") is not None:
+                entry.work = payload.get("work")
             self._active.discard(run_id)
             self._render_node(run_id)
 

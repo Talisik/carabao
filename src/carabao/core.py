@@ -104,7 +104,7 @@ class Core:
             dev_mode: Whether to run in development mode
             test_mode: Whether to run in test mode
             exit_on_finish: Overrides the EXIT_ON_FINISH setting when not None.
-                The visualizer passes False so the loop never calls exit().
+                The UI passes False so the loop never calls exit().
         """
         cls.initialize(
             name=name,
@@ -146,8 +146,7 @@ class Core:
     def __has_primary(root, name: str) -> bool:
         """Checks (without instantiating) if a registry has a matching primary lane."""
         return any(
-            lane.primary() and lane.condition(name)
-            for lane in root.available_lanes()
+            lane.primary() and lane.condition(name) for lane in root.available_lanes()
         )
 
     @staticmethod

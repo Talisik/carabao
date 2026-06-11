@@ -100,6 +100,10 @@ class Display(App):
         key=lambda x: x["name"],
     )
 
+    def on_mount(self):
+        # Use the terminal's ANSI palette + default (transparent) background.
+        self.theme = "textual-ansi"
+
     def compose(self):
         yield Footer()
 

@@ -109,9 +109,9 @@ def dev(
     )
 
     SECRET_CFG.write(
-        section=SECRET_CFG.VISUALIZER,
-        key=SECRET_CFG.VISUALIZER,
-        value=str(result.visualizer),
+        section=SECRET_CFG.UI,
+        key=SECRET_CFG.UI,
+        value=str(result.ui),
     )
 
     for key, value in result.raw_form.items():
@@ -132,7 +132,7 @@ def dev(
 
     # Run the program again.
 
-    if result.visualizer:
+    if result.ui:
         from .cmd_dev.ui import UI
 
         UI(
