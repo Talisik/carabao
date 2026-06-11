@@ -54,9 +54,9 @@ class Display(App[Result]):
 
     lane_list: ListView
 
-    def on_mount(self):
-        # Use the terminal's ANSI palette + default (transparent) background.
-        self.theme = "textual-ansi"
+    def __init__(self, *args, **kwargs):
+        # ansi_color=True → terminal's ANSI palette + transparent background.
+        super().__init__(*args, ansi_color=True, **kwargs)
 
     def __compose_lane_list(self):
         try:
@@ -358,7 +358,7 @@ class MyLane(Lane):
         priority_number: int,
     ):
         return node.add(
-            f"{name + ' ' if name else ''}[dim]{priority_number}[/dim]",
+            f"{name + ' ' if name else ''}[bright_black]{priority_number}[/]",
             expand=True,
             allow_expand=False,
         )

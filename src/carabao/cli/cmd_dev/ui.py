@@ -24,7 +24,7 @@ from textual.widgets.tree import TreeNode
 
 _LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"]
 _LEVEL_COLOR = {
-    "DEBUG": "dim",
+    "DEBUG": "bright_black",
     "INFO": "cyan",
     "WARNING": "yellow",
     "ERROR": "bold red",
@@ -114,7 +114,11 @@ class UI(App):
     ]
 
     def __init__(self, runner: Callable[[], None], title: str = "Lane UI"):
-        super().__init__()
+        # ansi_color=True renders with the terminal's own ANSI palette + default
+        # (transparent) background instead of a painted theme color. Must be
+        # passed to the constructor (it drives the render filters there); a class
+        # attribute alone has no effect. No theme registration needed.
+        super().__init__(ansi_color=True)
         self._runner = runner
         self._run_title = title
         self._lane_nodes: Dict[int, _NodeState] = {}
@@ -155,10 +159,6 @@ class UI(App):
 
     def on_mount(self):
         self.title = self._run_title
-        # Use the terminal's own ANSI palette + default background, so the panes
-        # show the real terminal background (transparency) instead of a theme
-        # color. Combined with the `background: transparent` rules above.
-        self.theme = "textual-ansi"
         # Route logs to the pane only; silence the console stream so it can't
         # corrupt the TUI. Restored on unmount.
         self._null = open(os.devnull, "w")
@@ -367,12 +367,12 @@ class UI(App):
             frame = _SPINNER[self._frame % len(_SPINNER)]
             label = f"[yellow]{frame}[/] [bold]{name}[/]"
         elif entry.state == "done":
-            secs = f" [dim]{entry.work:.2f}s[/]" if entry.work is not None else ""
+            secs = f" [bright_black]{entry.work:.2f}s[/]" if entry.work is not None else ""
             label = f"[green]✓[/] {name}{secs}"
         elif entry.state == "terminated":
             label = f"[red]✕[/] {name}"
         else:
-            label = f"[dim]·[/] {name}"
+            label = f"[bright_black]·[/] {name}"
 
         entry.node.set_label(label)
 
