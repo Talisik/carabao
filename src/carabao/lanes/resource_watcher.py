@@ -70,6 +70,13 @@ class ResourceWatcher(Lane):
         logger.info(x) if logger is not None else print(x)
     )
 
+    _stop = threading.Event()
+
+    @classmethod
+    def stop(cls):
+        """Signals the watcher thread to exit (e.g. when the pipeline is done)."""
+        cls._stop.set()
+
     @classmethod
     def passive(cls) -> bool:
         return True
@@ -101,6 +108,7 @@ class ResourceWatcher(Lane):
             )
             return
 
+        ResourceWatcher._stop.clear()
         threading.Thread(
             target=self._watch,
             daemon=True,
@@ -122,7 +130,7 @@ class ResourceWatcher(Lane):
         prev_io_bytes: int | None = None
         prev_io_time: float | None = None
 
-        while True:
+        while not ResourceWatcher._stop.is_set():
             mem = proc.memory_full_info()
             rss_mb = mem.rss / _MB
             swap_mb = getattr(mem, "swap", 0) / _MB
@@ -189,4 +197,4 @@ class ResourceWatcher(Lane):
             elif ResourceWatcher.debug_logger:
                 ResourceWatcher.debug_logger(msg)
 
-            time.sleep(interval)
+            ResourceWatcher._stop.wait(interval)

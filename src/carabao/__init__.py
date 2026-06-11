@@ -5,7 +5,6 @@ from .lanes import (
     LogToDB,
     NetworkHealth,
     NetworkWatcher,
-    PrettyEnv,
     ResourceWatcher,
 )
 from .settings import Settings
@@ -50,7 +49,6 @@ __all__ = [
     "LogToDB",
     "NetworkHealth",
     "NetworkWatcher",
-    "PrettyEnv",
     "ResourceWatcher",
     "Settings",
     "start",

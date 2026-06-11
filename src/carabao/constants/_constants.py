@@ -97,6 +97,7 @@ class Constants:
         cls.__env = True
 
         result = []
+        cls.loaded_env_files = []
 
         from ..core import Core
         from ..style import style
@@ -114,12 +115,15 @@ class Constants:
 
             load_dotenv(filepath)
 
+            cls.loaded_env_files.append(filepath)
             result.append(styler(filepath))
 
-        print(
-            "Environment:",
-            " + ".join(result) + "\n",
-        )
+        # The dev UI shows this in its Environment tab instead.
+        if not Core.is_quiet():
+            print(
+                "Environment:",
+                " + ".join(result) + "\n",
+            )
 
     def load_all_properties(self):
         """

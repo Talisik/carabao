@@ -57,6 +57,13 @@ class NetworkWatcher(Lane):
         logger.info(x) if logger is not None else print(x)
     )
 
+    _stop = threading.Event()
+
+    @classmethod
+    def stop(cls):
+        """Signals the watcher thread to exit (e.g. when the pipeline is done)."""
+        cls._stop.set()
+
     @classmethod
     def passive(cls) -> bool:
         return True

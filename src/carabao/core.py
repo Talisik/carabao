@@ -27,6 +27,7 @@ class Core:
     __dev_mode = False
     __started = False
     __exit_on_finish: Optional[bool] = None
+    __quiet = False
 
     def __init__(self):
         raise Exception("This is not instantiable!")
@@ -86,12 +87,19 @@ class Core:
         cls.__test_mode = test_mode
 
     @classmethod
+    def is_quiet(cls) -> bool:
+        """Whether console decoration (lane list, env table, mode banners) is
+        suppressed — set by the dev UI, which shows that info on-screen instead."""
+        return cls.__quiet
+
+    @classmethod
     def start(
         cls,
         name: Optional[str] = None,
         dev_mode: bool = False,
         test_mode: Optional[bool] = None,
         exit_on_finish: Optional[bool] = None,
+        quiet: bool = False,
     ):
         """
         Starts the framework with the specified settings.
@@ -105,6 +113,8 @@ class Core:
             test_mode: Whether to run in test mode
             exit_on_finish: Overrides the EXIT_ON_FINISH setting when not None.
                 The UI passes False so the loop never calls exit().
+            quiet: Suppress console decoration (lane list, env table, mode
+                banners). The dev UI sets this and shows the info on-screen.
         """
         cls.initialize(
             name=name,
@@ -119,6 +129,7 @@ class Core:
         cls.__dev_mode = dev_mode
         cls.__test_mode = test_mode
         cls.__exit_on_finish = exit_on_finish
+        cls.__quiet = quiet
 
         cls.__start()
 
@@ -245,24 +256,26 @@ class Core:
         if C.QUEUE_NAME is None:
             raise MissingEnvError("QUEUE_NAME")
 
-        if C.IN_DEVELOPMENT:
-            print(style.yellow("🛠️ Running in development mode."))
+        # The dev UI shows mode + env on-screen, so skip the console banners.
+        if not cls.__quiet:
+            if C.IN_DEVELOPMENT:
+                print(style.yellow("🛠️ Running in development mode."))
 
-        else:
-            print(style.green("🚀 Running in release mode."))
+            else:
+                print(style.green("🚀 Running in release mode."))
 
-        if C.TESTING:
-            print(style.blue("🧪 Running in testing mode."))
+            if C.TESTING:
+                print(style.blue("🧪 Running in testing mode."))
 
-            if not C.IN_DEVELOPMENT:
-                print(
-                    style.red(
-                        "🚨 You are testing in release mode! "
-                        "Did you do this intentionally?"
+                if not C.IN_DEVELOPMENT:
+                    print(
+                        style.red(
+                            "🚨 You are testing in release mode! "
+                            "Did you do this intentionally?"
+                        )
                     )
-                )
 
-        print()
+            print()
 
         settings.before_start()
 
@@ -281,7 +294,8 @@ class Core:
             exit_delay=settings.value_of("EXIT_DELAY"),
             error_handler=settings.error_handler,
         )
-        print_lanes = True
+        # The UI's lane tree replaces the console lane listing.
+        print_lanes = not cls.__quiet
 
         for loop in main:
             loop(

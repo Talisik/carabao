@@ -51,16 +51,23 @@ A Python library for building robust publisher-subscriber (pub/sub) frameworks w
 pip install carabao
 ```
 
+The interactive developer UI (the `moo dev` selector + live visualizer) is
+**optional** — it ships in the `standard` extra (à la `fastapi[standard]`):
+
+```sh
+pip install "carabao[standard]"
+```
+
+Without the extra, the core runtime (`moo run`, `moo dev <lane>`) works fully;
+only the interactive screens require it (you'll get a clear message prompting
+the install if you open them without it).
+
 ## Requirements
 
--   async-timeout
--   dnspython
--   fun-things
--   generic-lane
--   lazy-main
--   python-dotenv
--   simple-chalk
--   typing-extensions
+Core: `async-timeout`, `dnspython`, `fun-things`, `lazy-main`, `python-dotenv`,
+`typing-extensions`, `typer`, `lane2lane`.
+
+`standard` extra (interactive UI): `textual`, `textual-slider`.
 
 ## Usage
 
@@ -220,13 +227,43 @@ moo init [--skip]
 moo new [lane_name]
 ```
 
-The development mode (`dev`) command:
+### Development UI (`moo dev`)
 
--   If no queue name is provided, displays an interactive curses-based menu to select from available lanes
--   Highlights the last run queue
--   Provides navigation with arrow keys
--   Allows selection with Enter key
--   Exit option at the bottom
+Requires the `standard` extra (`pip install "carabao[standard]"`).
+
+**Selector.** `moo dev` (no queue name) opens an interactive Textual screen:
+
+-   Lists every available primary lane — both sync (`Lane`) and async
+    (`AsyncLane`).
+-   Shows the selected lane's docstring and a **Process Tree** built from its
+    `lanes` field (recursive — new sub-lanes appear automatically).
+-   Edits the lane's form fields (if it defines a `Form`).
+-   Toggles: **🧪 Test Mode** and **📊 UI** (the live visualizer; on by default).
+-   Remembers your last selection. `Enter` runs, `Esc` exits.
+
+`moo dev <queue_name>` skips the selector and runs that lane directly.
+
+**Live UI / visualizer.** With the **📊 UI** toggle on, running a lane opens a
+live dashboard:
+
+-   **Lane tree** — the full pipeline laid out from the `lanes` field up front;
+    each lane lights up (spinner) as it runs and shows `✓` + its true work time
+    when done.
+-   **Log pane** — captures `print()`, the `l2l` logger, **loguru**, and the
+    stdlib `logging` module (including non-propagating loggers). Features:
+    -   selectable text (drag to select, `Ctrl+C` to copy)
+    -   pretty, syntax-highlighted JSON and inline markdown (`**bold**`,
+        `` `code` ``, `*italic*`, `~~strike~~`)
+    -   per-level filter checkboxes that appear only for levels seen, each with
+        a live count (`INFO 5K`)
+    -   `/` to search; top-right toggles for **tree**, **time**, **lvl**,
+        **rich**, and **scroll** (auto-scroll)
+-   **Status** — a live elapsed timer while running, `Done in <time>` (green) or
+    `Error: …` (red) on completion. `Esc` quits (confirms first if still
+    running; the hotkey turns red once it's safe to exit).
+
+Async lanes are detected automatically and run via `asyncio`; the core runtime
+(`moo run`) carries no overhead from any of the UI instrumentation.
 
 ## Development
 
