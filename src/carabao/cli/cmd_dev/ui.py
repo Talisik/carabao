@@ -115,6 +115,9 @@ _LEVEL_COLOR = {
     "PRINT": "white",
 }
 _SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+_HOTKEYS_RUNNING = "[b]esc[/] quit   [b]/[/] search"
+# Highlight "esc quit" once the pipeline is done — the user can safely exit.
+_HOTKEYS_DONE = "[b bright_red]esc quit[/]   [b]/[/] search"
 
 
 class _LogWriter:
@@ -248,7 +251,12 @@ class UI(App):
         Binding("slash", "focus_search", "Search"),
     ]
 
-    def __init__(self, runner: Callable[[], None], title: str = "Lane UI"):
+    def __init__(
+        self,
+        runner: Callable[[], None],
+        title: str = "Lane UI",
+        lanes: Optional[list] = None,
+    ):
         # ansi_color=True renders with the terminal's own ANSI palette + default
         # (transparent) background instead of a painted theme color. Must be
         # passed to the constructor (it drives the render filters there); a class
@@ -256,7 +264,14 @@ class UI(App):
         super().__init__(ansi_color=True)
         self._runner = runner
         self._run_title = title
-        self._lane_nodes: Dict[int, _NodeState] = {}
+        # Primary lane class(es) to pre-lay the structural tree from.
+        self._structure_lanes = lanes or []
+        # Tree state. _NodeState entries; structural nodes are pre-built from the
+        # lanes field, then matched to running lanes by (parent, name).
+        self._run_to_node: Dict[int, _NodeState] = {}
+        self._struct_roots: Dict[str, _NodeState] = {}
+        self._struct_children: Dict[int, Dict[str, _NodeState]] = {}
+        self._claimed: set = set()
         self._active: set = set()
         self._records: List[Tuple[datetime, str, str]] = []
         # Level filter checkboxes are created on first sighting of each level
@@ -311,7 +326,8 @@ class UI(App):
 
         # Bottom bar: hotkeys on the left, run status on the right.
         with Horizontal(id="bottombar"):
-            yield Static("[b]esc[/] quit   [b]/[/] search", id="hotkeys")
+            self._hotkeys = Static(_HOTKEYS_RUNNING, id="hotkeys")
+            yield self._hotkeys
             self._status_bar = Static("Running…", id="status")
             yield self._status_bar
 
@@ -326,6 +342,7 @@ class UI(App):
         logger.add_sink(self._on_log)
         self._bridge_loguru()
         self._bridge_logging()
+        self._build_structure()
         self.set_interval(0.1, self._tick_spinner)
         self._start_monotonic = monotonic()
         self.set_interval(0.1, self._update_status)
@@ -461,6 +478,7 @@ class UI(App):
             # generators that were abandoned before fully draining.
             self.call_from_thread(self._finalize_active)
             self.call_from_thread(self._status_bar.update, final)
+            self.call_from_thread(self._hotkeys.update, _HOTKEYS_DONE)
         except Exception:
             pass
 
@@ -473,11 +491,12 @@ class UI(App):
 
     def _finalize_active(self):
         for run_id in list(self._active):
-            entry = self._lane_nodes.get(run_id)
-            if entry is not None and entry.state == "active":
-                entry.state = "done"
+            entry = self._run_to_node.get(run_id)
+            if entry is not None:
+                if entry.state == "active":
+                    entry.state = "done"
+                self._render_node(entry)
             self._active.discard(run_id)
-            self._render_node(run_id)
 
     # ---- l2l callbacks (fire on the worker thread) -----------------------
 
@@ -493,89 +512,108 @@ class UI(App):
 
     # ---- UI-thread handlers ---------------------------------------------
 
-    def _ensure_node(
-        self,
-        run_id: int,
-        name: Optional[str],
-        parent_id: Optional[int],
-    ) -> _NodeState:
-        entry = self._lane_nodes.get(run_id)
+    def _build_structure(self):
+        # Pre-lay the full lane tree from the `lanes` field (recursive), so the
+        # whole plan shows up front; running lanes then highlight their node.
+        for lane_cls in self._structure_lanes:
+            try:
+                self._add_struct_node(lane_cls, self._tree.root, self._struct_roots, set())
+            except Exception:
+                pass
 
+    def _add_struct_node(self, lane_cls, parent_node, siblings, seen):
+        if lane_cls in seen:  # guard against cyclic lane references
+            return
+        seen = seen | {lane_cls}
+
+        name = lane_cls.first_name()
+        node = parent_node.add(name, expand=True, allow_expand=False)
+        entry = _NodeState(node, name)
+        siblings.setdefault(name, entry)
+        children: Dict[str, _NodeState] = {}
+        self._struct_children[id(entry)] = children
+        self._render_node(entry)
+
+        lanes = lane_cls.get_lanes()
+        for priority in sorted(lanes):
+            ref = lanes[priority]
+            if ref is None:
+                continue
+            try:
+                resolved = lane_cls._resolve_lane_reference(ref)
+            except Exception:
+                resolved = None
+            if isinstance(resolved, type):
+                self._add_struct_node(resolved, node, children, seen)
+            # Mock/dict (anonymous groups) are matched lazily at runtime instead.
+
+    def _node_for(self, run_id, name, parent_id) -> _NodeState:
+        entry = self._run_to_node.get(run_id)
         if entry is not None:
-            if name and entry.name != name:
-                entry.name = name
-                self._render_node(run_id)
-
             return entry
 
-        if parent_id is None:
-            parent_node = self._tree.root
-        else:
-            parent_node = self._ensure_node(parent_id, None, None).node
+        parent = self._run_to_node.get(parent_id) if parent_id else None
+        siblings = self._struct_children.get(id(parent)) if parent else self._struct_roots
 
-        # allow_expand=False hides the collapse triangle and keeps it expanded.
-        node = parent_node.add(name or "…", expand=True, allow_expand=False)
-        entry = _NodeState(node, name or "…")
-        self._lane_nodes[run_id] = entry
+        match = siblings.get(name) if siblings else None
+        if match is not None and id(match) not in self._claimed:
+            self._claimed.add(id(match))
+            self._run_to_node[run_id] = match
+            return match
 
+        # Not in the pre-built structure (goto/Mock/duplicate, or no lane passed)
+        # — attach under the matched parent (or root).
+        parent_node = parent.node if parent else self._tree.root
+        node = parent_node.add(name, expand=True, allow_expand=False)
+        entry = _NodeState(node, name)
+        self._struct_children[id(entry)] = {}
+        if siblings is not None:
+            siblings[f"{name}\x00{run_id}"] = entry
+        self._run_to_node[run_id] = entry
+        self._render_node(entry)
         return entry
 
     def _apply_event(self, kind: str, payload: dict):
         run_id = payload.get("run_id")
-
         if run_id is None:
             return
 
-        if kind == "lane_started":
-            # Ignored: generator-entry order is lazy/reversed. The tree is built
-            # from lane_active instead, which fires in true execution order.
-            return
-
-        elif kind == "lane_active":
-            # A process() call is running now — exactly one lane at a time, in
-            # real execution order. Creating nodes here keeps the tree ordered
-            # and drives the spinner truthfully.
-            entry = self._ensure_node(
-                run_id,
-                payload.get("name"),
-                payload.get("parent_id"),
+        if kind == "lane_active":
+            entry = self._node_for(
+                run_id, payload.get("name"), payload.get("parent_id")
             )
             entry.state = "active"
             self._active.add(run_id)
-            self._render_node(run_id)
+            self._render_node(entry)
 
         elif kind == "lane_idle":
-            entry = self._ensure_node(run_id, payload.get("name"), None)
-            entry.state = "done"
-            entry.work = payload.get("work")
-            self._active.discard(run_id)
-            self._render_node(run_id)
+            entry = self._run_to_node.get(run_id)
+            if entry is not None:
+                entry.state = "done"
+                entry.work = payload.get("work")
+                self._active.discard(run_id)
+                self._render_node(entry)
 
         elif kind == "lane_done":
-            entry = self._ensure_node(run_id, payload.get("name"), None)
-            if payload.get("terminated"):
-                entry.state = "terminated"
-            elif entry.state != "active":
-                entry.state = "done"
-            # 'work' = truthful self-compute time.
-            if payload.get("work") is not None:
-                entry.work = payload.get("work")
-            self._active.discard(run_id)
-            self._render_node(run_id)
+            entry = self._run_to_node.get(run_id)
+            if entry is not None:
+                if payload.get("terminated"):
+                    entry.state = "terminated"
+                elif entry.state != "active":
+                    entry.state = "done"
+                if payload.get("work") is not None:
+                    entry.work = payload.get("work")
+                self._active.discard(run_id)
+                self._render_node(entry)
 
         elif kind == "lane_terminated":
-            entry = self._lane_nodes.get(run_id)
+            entry = self._run_to_node.get(run_id)
             if entry is not None:
                 entry.state = "terminated"
                 self._active.discard(run_id)
-                self._render_node(run_id)
+                self._render_node(entry)
 
-    def _render_node(self, run_id: int):
-        entry = self._lane_nodes.get(run_id)
-
-        if entry is None:
-            return
-
+    def _render_node(self, entry: _NodeState):
         name = entry.name
 
         if entry.state == "active":
@@ -600,7 +638,9 @@ class UI(App):
         self._frame += 1
 
         for run_id in list(self._active):
-            self._render_node(run_id)
+            entry = self._run_to_node.get(run_id)
+            if entry is not None:
+                self._render_node(entry)
 
     def _add_log(self, level: str, message: str):
         self._level_counts[level] = self._level_counts.get(level, 0) + 1

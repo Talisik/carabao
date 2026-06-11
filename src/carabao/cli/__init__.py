@@ -143,6 +143,7 @@ def dev(
                 exit_on_finish=False,
             ),
             title=result.name,
+            lanes=[result.lane],
         ).run()
     else:
         Core.start(

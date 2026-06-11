@@ -3,7 +3,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Tuple, Type
 
-from l2l import Lane, Mock
+from l2l import AsyncLane, Lane, Mock
 from l2l.types import LaneDictType
 from textual import on
 from textual.app import App
@@ -33,7 +33,7 @@ from ...helpers.utils import _str2bool, clean_docstring
 
 @dataclass
 class Result:
-    lane: Type[Lane]
+    lane: Type  # sync Lane or AsyncLane
     name: str
     test_mode: bool
     form: dict[str, Any]
@@ -162,6 +162,8 @@ class Display(App[Result]):
 
     def compose(self):
         self.forms: Dict[str, Dict[str, Tuple[str, Callable]]] = {}
+        # Both registries: sync Lane and AsyncLane primaries.
+        candidates = [*Lane.available_lanes(), *AsyncLane.available_lanes()]
         self.lanes = {
             lane.first_name(): (
                 lane,
@@ -170,7 +172,7 @@ class Display(App[Result]):
                     key=lambda field: field.name,
                 ),
             )
-            for lane in Lane.available_lanes()
+            for lane in candidates
             if lane.primary() and not lane.passive()
         }
         self.queue_names = sorted(self.lanes.keys())
