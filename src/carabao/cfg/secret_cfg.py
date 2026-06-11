@@ -26,7 +26,8 @@ class SecretCFG(BaseCFG):
     def ui(self):
         section = self.get_section(self.UI)
 
-        return section.get(self.UI) == "True"
+        # Default on when unset.
+        return section.get(self.UI, "True") == "True"
 
     def get_form(self, lane_name: str):
         return dict(

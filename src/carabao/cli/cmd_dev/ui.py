@@ -7,6 +7,7 @@ searchable/filterable log pane (fed by ``l2l.logger`` via a sink).
 Launched from the dev command when the "📊 UI" switch is on.
 """
 
+import json
 import logging
 import os
 import sys
@@ -14,14 +15,18 @@ import threading
 from typing import Callable, Dict, List, Optional, Tuple
 
 from l2l import events, logger
+from rich.highlighter import JSONHighlighter
 from rich.text import Text
 from textual import on
 from textual.app import App
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Checkbox, Input, Label, RichLog, Static, Tree
+from textual.widgets import Button, Checkbox, Input, Label, Static, Tree
 from textual.widgets.tree import TreeNode
+
+_JSON_HL = JSONHighlighter()
+_MAX_LINES = 2000  # cap rendered log entries to keep rebuilds snappy
 
 _LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"]
 _LEVEL_COLOR = {
@@ -86,25 +91,6 @@ class _Checkbox(Checkbox):
 
     BUTTON_LEFT = ""
     BUTTON_RIGHT = ""
-
-
-class _SelectableRichLog(RichLog):
-    """RichLog that supports mouse text selection + copy (Ctrl+C).
-
-    RichLog is a ScrollView (a container), so Textual disables selection on it
-    by default, and its Strip-based render isn't extractable by the base
-    ``get_selection``. This re-enables both.
-    """
-
-    @property
-    def allow_select(self) -> bool:
-        return True
-
-    def get_selection(self, selection):
-        # Build the full text from the rendered lines and let the Selection
-        # extract the highlighted span.
-        text = "\n".join(strip.text for strip in self.lines)
-        return selection.extract(text), "\n"
 
 
 class _ConfirmQuit(ModalScreen[bool]):
@@ -174,7 +160,8 @@ class UI(App):
     #filters Checkbox.-on > .toggle--button { background: transparent; color: $text-success; }
     /* Thin border puts the text on the inner row → vertically centered. */
     #search { width: 1fr; background: transparent; border: round $accent; height: auto; margin-bottom: 1; }
-    RichLog { height: 1fr; background: transparent; }
+    #log { height: 1fr; background: transparent; }
+    #log-content { width: 1fr; height: auto; background: transparent; }
     Tree { background: transparent; }
 
     /* Live tree: guides always visible, no hover/cursor line highlight. */
@@ -227,13 +214,13 @@ class UI(App):
                         yield _Checkbox(level, value=True, name=level)
 
                 yield Input(placeholder="Search logs…", id="search")
-                self._richlog = _SelectableRichLog(
-                    highlight=True,
-                    markup=True,
-                    wrap=False,
-                    id="log",
-                )
-                yield self._richlog
+                # A Static inside a scroll: Static emits selection offsets (so
+                # text is selectable/copyable, unlike RichLog) and lets us
+                # render pretty, highlighted JSON.
+                self._log_view = VerticalScroll(id="log")
+                with self._log_view:
+                    self._log_static = Static(id="log-content", markup=False)
+                    yield self._log_static
 
         # Bottom bar: hotkeys on the left, run status on the right.
         with Horizontal(id="bottombar"):
@@ -276,7 +263,6 @@ class UI(App):
             root.removeHandler(self._logging_handler)
             for handler in getattr(self, "_detached_handlers", []):
                 root.addHandler(handler)
-            root.setLevel(self._prev_root_level)
 
         if hasattr(self, "_prev_stream"):
             logger.set_stream(self._prev_stream)
@@ -315,18 +301,18 @@ class UI(App):
         stderr/stdout and would paint over the TUI); restored on unmount.
         """
         self._logging_handler = _LoggingHandler(self._on_log)
-        self._logging_handler.setLevel(logging.DEBUG)
+        self._logging_handler.setLevel(logging.NOTSET)
 
         root = logging.getLogger()
-        self._prev_root_level = root.level
+        # Do NOT lower the root level: leave it as configured so the UI shows the
+        # same records you'd see with the UI off. Forcing DEBUG here surfaced
+        # noisy third-party logs (e.g. pymongo command monitoring). l2l/loguru
+        # debug still flows via their own bridges.
         self._detached_handlers = [
             h for h in list(root.handlers) if isinstance(h, logging.StreamHandler)
         ]
         for handler in self._detached_handlers:
             root.removeHandler(handler)
-        # Lower the root level so DEBUG/INFO records reach the handler; restored
-        # on unmount.
-        root.setLevel(logging.DEBUG)
         root.addHandler(self._logging_handler)
 
     # ---- worker ----------------------------------------------------------
@@ -496,8 +482,10 @@ class UI(App):
     def _add_log(self, level: str, message: str):
         self._records.append((level, message))
 
-        if self._passes_filter(level, message):
-            self._write_record(level, message)
+        if len(self._records) > _MAX_LINES:
+            del self._records[: len(self._records) - _MAX_LINES]
+
+        self._render_log()
 
     def _passes_filter(self, level: str, message: str) -> bool:
         # Level filter applies only to the known levels; loguru extras
@@ -510,20 +498,38 @@ class UI(App):
 
         return True
 
-    def _write_record(self, level: str, message: str):
+    def _render_record(self, level: str, message: str) -> Text:
         color = _LEVEL_COLOR.get(level, "white")
-        line = Text.assemble(
-            (f"{level:<7} ", color),
-            Text.from_ansi(message),  # render ANSI from print(), no markup injection
-        )
-        self._richlog.write(line)
+        prefix = Text(f"{level:<7} ", style=color)
+        return Text.assemble(prefix, self._render_body(message))
+
+    def _render_body(self, message: str) -> Text:
+        # Pretty-print + syntax-highlight JSON payloads; otherwise keep ANSI.
+        stripped = message.strip()
+
+        if stripped[:1] in "{[":
+            try:
+                obj = json.loads(stripped)
+            except ValueError:
+                pass
+            else:
+                pretty = Text("\n" + json.dumps(obj, indent=2, ensure_ascii=False))
+                _JSON_HL.highlight(pretty)
+                return pretty
+
+        return Text.from_ansi(message)
+
+    def _render_log(self):
+        lines = [
+            self._render_record(level, message)
+            for level, message in self._records
+            if self._passes_filter(level, message)
+        ]
+        self._log_static.update(Text("\n").join(lines) if lines else Text(""))
+        self._log_view.scroll_end(animate=False)
 
     def _refilter(self):
-        self._richlog.clear()
-
-        for level, message in self._records:
-            if self._passes_filter(level, message):
-                self._write_record(level, message)
+        self._render_log()
 
     # ---- input events ----------------------------------------------------
 
