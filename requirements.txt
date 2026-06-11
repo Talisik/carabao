@@ -44,7 +44,6 @@ rfc3986==2.0.0
 rich==14.0.0
 SecretStorage==3.3.3
 shellingham==1.5.4
-simple-chalk==0.1.0
 textual==3.1.1
 textual-slider==0.2.0
 tomli==2.2.1

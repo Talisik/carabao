@@ -1,0 +1,322 @@
+"""Live lane visualizer for dev mode.
+
+A Textual app that runs the pipeline in a worker thread and shows, in real
+time, which lane is active (a tree fed by ``l2l.events``) alongside a
+searchable/filterable log pane (fed by ``l2l.logger`` via a sink).
+
+Launched from the dev command when the "📊 Visualizer" switch is on.
+"""
+
+import os
+import threading
+from typing import Callable, Dict, List, Optional, Tuple
+
+from l2l import events, logger
+from textual import on
+from textual.app import App
+from textual.binding import Binding
+from textual.containers import Horizontal, Vertical
+from textual.widgets import Checkbox, Footer, Header, Input, RichLog, Static, Tree
+from textual.widgets.tree import TreeNode
+
+_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"]
+_LEVEL_COLOR = {
+    "DEBUG": "dim",
+    "INFO": "cyan",
+    "WARNING": "yellow",
+    "ERROR": "bold red",
+}
+_SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+
+class _NodeState:
+    __slots__ = ("node", "name", "state", "duration")
+
+    def __init__(self, node: TreeNode, name: str):
+        self.node = node
+        self.name = name
+        self.state = "pending"
+        self.duration: Optional[float] = None
+
+
+class Visualizer(App):
+    """Runs ``runner`` in a worker thread and visualizes lane activity."""
+
+    CSS = """
+    #body { height: 1fr; }
+    #tree { width: 40%; border-right: solid $accent; }
+    #logs { width: 1fr; }
+    #filters { height: auto; padding: 0 1; }
+    #filters Checkbox { width: auto; margin-right: 1; }
+    #search { width: 1fr; }
+    RichLog { height: 1fr; }
+    #status { height: 1; background: $boost; padding: 0 1; }
+    """
+
+    BINDINGS = [
+        Binding("escape", "quit", "Quit", priority=True),
+        Binding("q", "quit", "Quit"),
+        Binding("c", "clear_logs", "Clear logs"),
+        Binding("slash", "focus_search", "Search"),
+    ]
+
+    def __init__(self, runner: Callable[[], None], title: str = "Lane Visualizer"):
+        super().__init__()
+        self._runner = runner
+        self._run_title = title
+        self._lane_nodes: Dict[int, _NodeState] = {}
+        self._active: set = set()
+        self._records: List[Tuple[str, str]] = []
+        self._enabled_levels: set = set(_LEVELS)
+        self._search: str = ""
+        self._frame = 0
+
+    # ---- layout ----------------------------------------------------------
+
+    def compose(self):
+        yield Header(show_clock=True)
+
+        with Horizontal(id="body"):
+            tree: Tree = Tree("Lanes", id="tree")
+            tree.root.expand()
+            self._tree = tree
+            yield tree
+
+            with Vertical(id="logs"):
+                with Horizontal(id="filters"):
+                    for level in _LEVELS:
+                        yield Checkbox(level, value=True, name=level)
+
+                yield Input(placeholder="Search logs…", id="search")
+                self._richlog = RichLog(
+                    highlight=True,
+                    markup=True,
+                    wrap=False,
+                    id="log",
+                )
+                yield self._richlog
+
+        self._status_bar = Static("Starting…", id="status")
+        yield self._status_bar
+        yield Footer()
+
+    def on_mount(self):
+        self.title = self._run_title
+        # Route logs to the pane only; silence the console stream so it can't
+        # corrupt the TUI. Restored on unmount.
+        self._null = open(os.devnull, "w")
+        self._prev_stream = logger._stream
+        logger.set_stream(self._null)
+        events.subscribe(self._on_event)
+        logger.add_sink(self._on_log)
+        self._bridge_loguru()
+        self.set_interval(0.1, self._tick_spinner)
+        # Daemon thread: the pipeline keeps running off the UI thread, and
+        # quitting the app can't hang on a run-forever loop.
+        self._worker = threading.Thread(target=self._run_pipeline, daemon=True)
+        self._worker.start()
+
+    def on_unmount(self):
+        events.unsubscribe(self._on_event)
+        logger.remove_sink(self._on_log)
+
+        if getattr(self, "_loguru_id", None) is not None:
+            try:
+                from loguru import logger as loguru_logger
+
+                loguru_logger.remove(self._loguru_id)
+            except Exception:
+                pass
+
+        if hasattr(self, "_prev_stream"):
+            logger.set_stream(self._prev_stream)
+
+        if hasattr(self, "_null"):
+            self._null.close()
+
+    def _bridge_loguru(self):
+        """Mirror loguru output (carabao/user lanes) into the log pane."""
+        self._loguru_id = None
+
+        try:
+            from loguru import logger as loguru_logger
+
+            def sink(message):
+                record = message.record
+                self._on_log(record["level"].name, record["message"])
+
+            self._loguru_id = loguru_logger.add(sink, level="DEBUG")
+        except Exception:
+            pass
+
+    # ---- worker ----------------------------------------------------------
+
+    def _run_pipeline(self):
+        message = "Done — press q to quit."
+
+        try:
+            self._runner()
+        except SystemExit:
+            # LazyMain may call exit() when the loop finishes; in a worker
+            # thread that just ends this worker, not the app.
+            pass
+        except Exception as error:  # surface, don't crash the app
+            message = f"Error: {error} — press q to quit."
+
+        # The app may already be shutting down; ignore if so.
+        try:
+            self.call_from_thread(self._status_bar.update, message)
+        except Exception:
+            pass
+
+    # ---- l2l callbacks (fire on the worker thread) -----------------------
+
+    def _on_event(self, kind: str, payload: dict):
+        self.call_from_thread(self._apply_event, kind, payload)
+
+    def _on_log(self, level: str, message: str):
+        self.call_from_thread(self._add_log, level, message)
+
+    # ---- UI-thread handlers ---------------------------------------------
+
+    def _ensure_node(
+        self,
+        run_id: int,
+        name: Optional[str],
+        parent_id: Optional[int],
+    ) -> _NodeState:
+        entry = self._lane_nodes.get(run_id)
+
+        if entry is not None:
+            if name and entry.name != name:
+                entry.name = name
+                self._render_node(run_id)
+
+            return entry
+
+        if parent_id is None:
+            parent_node = self._tree.root
+        else:
+            parent_node = self._ensure_node(parent_id, None, None).node
+
+        node = parent_node.add(name or "…", expand=True)
+        entry = _NodeState(node, name or "…")
+        self._lane_nodes[run_id] = entry
+
+        return entry
+
+    def _apply_event(self, kind: str, payload: dict):
+        run_id = payload.get("run_id")
+
+        if run_id is None:
+            return
+
+        if kind == "lane_started":
+            entry = self._ensure_node(
+                run_id,
+                payload.get("name"),
+                payload.get("parent_id"),
+            )
+            entry.state = "active"
+            self._active.add(run_id)
+            self._render_node(run_id)
+
+        elif kind == "lane_done":
+            entry = self._ensure_node(run_id, payload.get("name"), None)
+            entry.state = "terminated" if payload.get("terminated") else "done"
+            entry.duration = payload.get("duration")
+            self._active.discard(run_id)
+            self._render_node(run_id)
+
+        elif kind == "lane_terminated":
+            entry = self._lane_nodes.get(run_id)
+            if entry is not None:
+                entry.state = "terminated"
+                self._active.discard(run_id)
+                self._render_node(run_id)
+
+    def _render_node(self, run_id: int):
+        entry = self._lane_nodes.get(run_id)
+
+        if entry is None:
+            return
+
+        name = entry.name
+
+        if entry.state == "active":
+            frame = _SPINNER[self._frame % len(_SPINNER)]
+            label = f"[yellow]{frame}[/] [bold]{name}[/]"
+        elif entry.state == "done":
+            secs = f" [dim]{entry.duration:.2f}s[/]" if entry.duration else ""
+            label = f"[green]✓[/] {name}{secs}"
+        elif entry.state == "terminated":
+            label = f"[red]✕[/] {name}"
+        else:
+            label = f"[dim]·[/] {name}"
+
+        entry.node.set_label(label)
+
+    def _tick_spinner(self):
+        if not self._active:
+            return
+
+        self._frame += 1
+
+        for run_id in list(self._active):
+            self._render_node(run_id)
+
+    def _add_log(self, level: str, message: str):
+        self._records.append((level, message))
+
+        if self._passes_filter(level, message):
+            self._write_record(level, message)
+
+    def _passes_filter(self, level: str, message: str) -> bool:
+        # Level filter applies only to the known levels; loguru extras
+        # (SUCCESS/TRACE/CRITICAL/…) bypass it but still honor the search.
+        if level in _LEVELS and level not in self._enabled_levels:
+            return False
+
+        if self._search and self._search.lower() not in message.lower():
+            return False
+
+        return True
+
+    def _write_record(self, level: str, message: str):
+        color = _LEVEL_COLOR.get(level, "white")
+        self._richlog.write(f"[{color}]{level:<7}[/] {message}")
+
+    def _refilter(self):
+        self._richlog.clear()
+
+        for level, message in self._records:
+            if self._passes_filter(level, message):
+                self._write_record(level, message)
+
+    # ---- input events ----------------------------------------------------
+
+    @on(Checkbox.Changed)
+    def _on_checkbox(self, event: Checkbox.Changed):
+        level = event.checkbox.name
+
+        if level is None:
+            return
+
+        if event.value:
+            self._enabled_levels.add(level)
+        else:
+            self._enabled_levels.discard(level)
+
+        self._refilter()
+
+    @on(Input.Changed, "#search")
+    def _on_search(self, event: Input.Changed):
+        self._search = event.value
+        self._refilter()
+
+    def action_clear_logs(self):
+        self._records.clear()
+        self._richlog.clear()
+
+    def action_focus_search(self):
+        self.query_one("#search", Input).focus()

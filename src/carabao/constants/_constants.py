@@ -96,25 +96,25 @@ class Constants:
 
         cls.__env = True
 
-        template = "\033[{0}m{1}\033[0m"
         result = []
 
         from ..core import Core
+        from ..style import style
 
         is_dev = Core.is_dev()
 
-        for filepath, template in {
-            ".env.development" if is_dev else ".env.release": "\033[43;30m{0}\033[0m"
-            if is_dev
-            else "\033[42;30m{0}\033[0m",
-            ".env": "\033[47;30m{0}\033[0m",
+        for filepath, styler in {
+            (".env.development" if is_dev else ".env.release"): (
+                style.black.on_yellow if is_dev else style.black.on_green
+            ),
+            ".env": style.black.on_white,
         }.items():
             if not os.path.exists(filepath):
                 continue
 
             load_dotenv(filepath)
 
-            result.append(template.format(filepath))
+            result.append(styler(filepath))
 
         print(
             "Environment:",

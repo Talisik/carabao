@@ -11,9 +11,28 @@ from ..cfg.secret_cfg import SECRET_CFG
 from ..core import Core
 from ..helpers.prompter import Prompter
 from ..settings import Settings
-from . import cmd_dev, cmd_new, init_prompter
+from . import init_prompter
 
 app = typer.Typer()
+
+
+def _require_standard():
+    """Ensures the optional TUI dependencies are installed.
+
+    The interactive dev/new screens use Textual, which ships in the
+    ``standard`` extra (``pip install carabao[standard]``). Exits with a
+    helpful message if it is missing.
+    """
+    try:
+        import textual  # noqa: F401
+        import textual_slider  # noqa: F401
+    except ImportError:
+        typer.secho(
+            "This command needs the optional UI dependencies.\n"
+            "Install them with: pip install carabao[standard]",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(1)
 
 
 @app.command(
@@ -57,6 +76,11 @@ def dev(
         )
         return
 
+    # Interactive selector needs the optional UI dependencies.
+    _require_standard()
+
+    from . import cmd_dev
+
     Core.initialize(
         name=name,
         dev_mode=True,
@@ -84,6 +108,12 @@ def dev(
         value=str(result.test_mode),
     )
 
+    SECRET_CFG.write(
+        section=SECRET_CFG.VISUALIZER,
+        key=SECRET_CFG.VISUALIZER,
+        value=str(result.visualizer),
+    )
+
     for key, value in result.raw_form.items():
         SECRET_CFG.write(
             section=f"{result.name}{SECRET_CFG.FORM}",
@@ -102,11 +132,24 @@ def dev(
 
     # Run the program again.
 
-    Core.start(
-        name=result.name,
-        dev_mode=True,
-        test_mode=result.test_mode,
-    )
+    if result.visualizer:
+        from .cmd_dev.visualizer import Visualizer
+
+        Visualizer(
+            runner=lambda: Core.start(
+                name=result.name,
+                dev_mode=True,
+                test_mode=result.test_mode,
+                exit_on_finish=False,
+            ),
+            title=result.name,
+        ).run()
+    else:
+        Core.start(
+            name=result.name,
+            dev_mode=True,
+            test_mode=result.test_mode,
+        )
 
 
 @app.command(
@@ -231,6 +274,10 @@ def new(
     If no lane directories are configured, the command will display an error.
     """
     sys.path.insert(0, os.getcwd())
+
+    _require_standard()
+
+    from . import cmd_new
 
     lane_directories = [
         *map(

@@ -38,6 +38,7 @@ class Result:
     test_mode: bool
     form: dict[str, Any]
     raw_form: dict[str, str]
+    visualizer: bool = False
 
 
 class Display(App[Result]):
@@ -135,6 +136,16 @@ class Display(App[Result]):
 
             yield self.test_mode
             yield Label("🧪 Test Mode")
+
+        with Horizontal(
+            classes="switch",
+        ):
+            self.visualizer = Switch(
+                SECRET_CFG.visualizer,
+            )
+
+            yield self.visualizer
+            yield Label("📊 Visualizer")
 
         yield Button.error(
             "\\[Esc] Exit",
@@ -473,6 +484,7 @@ class MyLane(Lane):
                 test_mode=self.test_mode.value,
                 form={name: field[1](field[0]) for name, field in _form.items()},
                 raw_form={name: field[0] for name, field in _form.items()},
+                visualizer=self.visualizer.value,
             ),
         )
 
