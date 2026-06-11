@@ -1,16 +1,25 @@
+$accent: #3b82f6;
+
 ListView {
     align: left top;
     margin: 0;
     margin-bottom: 1;
-    border: round;
+    border: round $accent;
     padding: 0;
     overflow: auto;
     overflow-x: hidden;
     width: 30%;
+    background: transparent;
 }
 
 ListItem {
     padding: 1 2;
+    background: transparent;
+}
+
+/* Keep a background on the selected/highlighted template. */
+#template-list > ListItem.-highlight {
+    background: $accent;
 }
 
 Button:focus {
@@ -35,6 +44,7 @@ Switch {
 #info-container {
     margin: 1;
     overflow: auto;
+    background: transparent;
 }
 
 .info-label {
@@ -47,8 +57,17 @@ Switch {
     margin-bottom: 2;
 }
 
+#content {
+    background: transparent;
+}
+
 #content * {
     overflow: hidden;
+}
+
+#right-container {
+    width: 70%;
+    background: transparent;
 }
 
 #navi-container {
@@ -59,23 +78,24 @@ Switch {
 
 #select {
     width: 30%;
+    background: #3fb950;
+    color: auto;
 }
 
 #exit {
     width: 20%;
     dock: right;
-}
-
-#right-container {
-    width: 70%;
+    background: #f85149;
+    color: auto;
 }
 
 #inputs-container {
     margin: 0;
     padding: 1;
     padding-bottom: 0;
-    border: round;
+    border: round $accent;
     height: auto;
+    background: transparent;
 }
 
 .input-label {
@@ -85,6 +105,8 @@ Switch {
 
 Input {
     margin-bottom: 1;
+    border: round $accent;
+    background: transparent;
 }
 
 Switch > .switch--slider {

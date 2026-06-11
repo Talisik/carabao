@@ -10,7 +10,7 @@ ListView {
     align: left top;
     margin: 0;
     margin-bottom: 1;
-    border: round;
+    border: round $accent;
     padding: 0;
     overflow: auto;
     overflow-x: hidden;
