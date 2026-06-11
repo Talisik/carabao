@@ -156,6 +156,7 @@ class UI(App):
     """Runs ``runner`` in a worker thread and visualizes lane activity."""
 
     CSS = """
+    $accent: #3b82f6;
     Screen { background: transparent; }
     #body { height: 1fr; background: transparent; }
     #tree { width: 25%; border-right: solid $accent; background: transparent; }
@@ -165,7 +166,9 @@ class UI(App):
     #filters Checkbox > .toggle--button { background: transparent; color: $panel; }
     #filters Checkbox.-on > .toggle--button { background: transparent; color: $text-success; }
     #search { width: 1fr; background: $surface; border: none; }
-    RichLog { height: 1fr; background: transparent; }
+    /* Solid background: a transparent scrolling RichLog leaves stale cells that
+       bleed onto the widgets above it (Textual compositor quirk). */
+    RichLog { height: 1fr; background: $surface; }
     Tree { background: transparent; }
 
     /* Live tree: guides always visible, no hover/cursor line highlight. */
@@ -176,7 +179,7 @@ class UI(App):
     #tree > .tree--highlight-line { background: transparent; text-style: none; }
 
     /* Bottom bar: hotkeys (left) + run status (right), like a footer. */
-    #bottombar { dock: bottom; height: 1; background: transparent; }
+    #bottombar { dock: bottom; height: 1; margin-top: 1; background: transparent; }
     #hotkeys { width: auto; color: $text-muted; }
     #status { width: 1fr; content-align: right middle; color: $text-muted; }
     """
@@ -441,7 +444,7 @@ class UI(App):
 
         if entry.state == "active":
             frame = _SPINNER[self._frame % len(_SPINNER)]
-            label = f"[yellow]{frame}[/] [bold]{name}[/]"
+            label = f"[#3b82f6]{frame}[/] [bold]{name}[/]"
         elif entry.state == "done":
             secs = f" [bright_black]{entry.work:.2f}s[/]" if entry.work is not None else ""
             label = f"[green]✓[/] {name}{secs}"

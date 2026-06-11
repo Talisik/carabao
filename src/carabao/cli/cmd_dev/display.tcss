@@ -1,3 +1,5 @@
+$accent: #3b82f6;
+
 Horizontal {
     height: auto;
     padding: 0;
