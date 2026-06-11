@@ -135,20 +135,6 @@ class _LogWriter:
         return False
 
 
-class _LoggingHandler(logging.Handler):
-    """Bridges the stdlib ``logging`` module into the log pane."""
-
-    def __init__(self, forward: Callable[[str, str], None]):
-        super().__init__()
-        self._forward = forward
-
-    def emit(self, record: logging.LogRecord):
-        try:
-            self._forward(record.levelname, record.getMessage())
-        except Exception:
-            pass
-
-
 class _Checkbox(Checkbox):
     """Checkbox without the ``▐ ▌`` side bars (the white block)."""
 
@@ -344,9 +330,9 @@ class UI(App):
             except Exception:
                 pass
 
-        if getattr(self, "_logging_handler", None) is not None:
+        if getattr(self, "_orig_call_handlers", None) is not None:
+            logging.Logger.callHandlers = self._orig_call_handlers  # type: ignore[assignment]
             root = logging.getLogger()
-            root.removeHandler(self._logging_handler)
             for handler in getattr(self, "_detached_handlers", []):
                 root.addHandler(handler)
             if hasattr(self, "_prev_root_level"):
@@ -385,18 +371,15 @@ class UI(App):
             pass
 
     def _bridge_logging(self):
-        """Mirror stdlib ``logging`` (user lanes / libraries) into the log pane.
+        """Mirror stdlib ``logging`` into the log pane — every logger, including
+        ones with ``propagate=False`` (e.g. OpenTelemetry's direct logger).
 
-        Also detach existing root StreamHandlers (they write to the real
-        stderr/stdout and would paint over the TUI); restored on unmount.
+        Works by tapping ``Logger.callHandlers`` (called once per record, after
+        level filtering), so it doesn't depend on root propagation. Root is set
+        to DEBUG and noisy libraries muted; existing root console handlers are
+        detached to avoid painting over the TUI.
         """
-        self._logging_handler = _LoggingHandler(self._on_log)
-        self._logging_handler.setLevel(logging.NOTSET)
-
         root = logging.getLogger()
-        # Root → DEBUG so the user's own loggers (which inherit root's level)
-        # surface in the pane. Mute known-noisy libraries individually so this
-        # doesn't flood the log (e.g. pymongo command monitoring).
         self._prev_root_level = root.level
         root.setLevel(logging.DEBUG)
         self._muted_levels = {}
@@ -410,7 +393,19 @@ class UI(App):
         ]
         for handler in self._detached_handlers:
             root.removeHandler(handler)
-        root.addHandler(self._logging_handler)
+
+        forward = self._on_log
+        original = logging.Logger.callHandlers
+        self._orig_call_handlers = original
+
+        def tap(logger_self, record):
+            original(logger_self, record)
+            try:
+                forward(record.levelname, record.getMessage())
+            except Exception:
+                pass
+
+        logging.Logger.callHandlers = tap  # type: ignore[assignment]
 
     # ---- worker ----------------------------------------------------------
 
