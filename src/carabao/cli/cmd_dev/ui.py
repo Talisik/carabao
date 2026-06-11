@@ -41,6 +41,14 @@ _MD_RE = re.compile(
 _MD_STYLE = {"code": "cyan", "bold": "bold", "strike": "strike", "italic": "italic"}
 
 
+def _abbrev_count(n: int) -> str:
+    """Compact integer: 50, 5K, 1M, 2B (no decimals)."""
+    for divisor, suffix in ((1_000_000_000, "B"), (1_000_000, "M"), (1_000, "K")):
+        if n >= divisor:
+            return f"{n // divisor}{suffix}"
+    return str(n)
+
+
 def _inline_markdown(text: str) -> Text:
     """Render inline markdown (bold/italic/code/strike) as styled Text.
 
@@ -81,12 +89,14 @@ _NOISY_LOGGERS = (
     "redis",
 )
 
-_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"]
 _LEVEL_COLOR = {
     "DEBUG": "bright_black",
     "INFO": "cyan",
     "WARNING": "yellow",
     "ERROR": "bold red",
+    "CRITICAL": "bold red",
+    "SUCCESS": "green",
+    "TRACE": "bright_black",
     "PRINT": "white",
 }
 _SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
@@ -247,29 +257,35 @@ class UI(App):
         self._lane_nodes: Dict[int, _NodeState] = {}
         self._active: set = set()
         self._records: List[Tuple[datetime, str, str]] = []
-        self._enabled_levels: set = set(_LEVELS)
+        # Level filter checkboxes are created on first sighting of each level
+        # (so a level with no logs shows no checkbox), labeled with a count.
+        self._enabled_levels: set = set()
+        self._level_counts: Dict[str, int] = {}
+        self._level_checkboxes: Dict[str, _Checkbox] = {}
         self._search: str = ""
         self._frame = 0
         # Display toggles (top-right of the log pane).
         self._show_time = True
         self._show_level = True
         self._show_rich = True
+        self._autoscroll = True
+        self._show_tree = True
         self._finished = False
 
     # ---- layout ----------------------------------------------------------
 
     def compose(self):
-        # Filters + search span the full width, above both panes.
+        # Filters + search span the full width, above both panes. Level filter
+        # checkboxes are added dynamically as levels appear (see _add_log).
         with Horizontal(id="filters"):
-            for level in _LEVELS:
-                yield _Checkbox(level, value=True, name=level)
-
             # Spacer pushes the display toggles to the top-right.
             yield Static(id="filters-spacer")
             for label, key in (
+                ("tree", "show:tree"),
                 ("time", "show:time"),
                 ("lvl", "show:level"),
                 ("rich", "show:rich"),
+                ("scroll", "show:scroll"),
             ):
                 yield _Checkbox(label, value=True, name=key)
 
@@ -278,6 +294,7 @@ class UI(App):
         with Horizontal(id="body"):
             tree: Tree = Tree("Lanes", id="tree")
             tree.root.expand()
+            tree.root.allow_expand = False
             tree.show_cursor = False
             self._tree = tree
             yield tree
@@ -471,7 +488,8 @@ class UI(App):
         else:
             parent_node = self._ensure_node(parent_id, None, None).node
 
-        node = parent_node.add(name or "…", expand=True)
+        # allow_expand=False hides the collapse triangle and keeps it expanded.
+        node = parent_node.add(name or "…", expand=True, allow_expand=False)
         entry = _NodeState(node, name or "…")
         self._lane_nodes[run_id] = entry
 
@@ -560,6 +578,8 @@ class UI(App):
             self._render_node(run_id)
 
     def _add_log(self, level: str, message: str):
+        self._level_counts[level] = self._level_counts.get(level, 0) + 1
+        self._sync_level_checkbox(level)
         self._records.append((datetime.now(), level, message))
 
         if len(self._records) > _MAX_LINES:
@@ -567,10 +587,29 @@ class UI(App):
 
         self._render_log()
 
+    def _sync_level_checkbox(self, level: str):
+        # Create the level's filter checkbox on first sighting, and keep its
+        # label's count up to date. Any level (CRITICAL/SUCCESS/TRACE/PRINT/…)
+        # becomes toggleable; a level with no logs shows no checkbox.
+        label = f"{level} {_abbrev_count(self._level_counts.get(level, 0))}"
+        checkbox = self._level_checkboxes.get(level)
+
+        if checkbox is None:
+            self._enabled_levels.add(level)
+            checkbox = _Checkbox(label, value=True, name=level)
+            self._level_checkboxes[level] = checkbox
+            try:
+                self.query_one("#filters").mount(
+                    checkbox,
+                    before=self.query_one("#filters-spacer"),
+                )
+            except Exception:
+                pass
+        else:
+            checkbox.label = label
+
     def _passes_filter(self, level: str, message: str) -> bool:
-        # Level filter applies only to the known levels; loguru extras
-        # (SUCCESS/TRACE/CRITICAL/…) bypass it but still honor the search.
-        if level in _LEVELS and level not in self._enabled_levels:
+        if level not in self._enabled_levels:
             return False
 
         if self._search and self._search.lower() not in message.lower():
@@ -623,7 +662,8 @@ class UI(App):
             if self._passes_filter(level, message)
         ]
         self._log_static.update(Text("\n").join(lines) if lines else Text(""))
-        self._log_view.scroll_end(animate=False)
+        if self._autoscroll:
+            self._log_view.scroll_end(animate=False)
 
     def _refilter(self):
         self._render_log()
@@ -646,6 +686,11 @@ class UI(App):
                 self._show_level = event.value
             elif option == "rich":
                 self._show_rich = event.value
+            elif option == "scroll":
+                self._autoscroll = event.value
+            elif option == "tree":
+                self._show_tree = event.value
+                self._tree.display = event.value
             self._render_log()
             return
 
@@ -660,12 +705,6 @@ class UI(App):
     def _on_search(self, event: Input.Changed):
         self._search = event.value
         self._refilter()
-
-    @on(Tree.NodeCollapsed, "#tree")
-    def _keep_tree_expanded(self, event: Tree.NodeCollapsed):
-        # Keep the collapse triangle visible but don't actually collapse —
-        # re-expand any node the user tries to collapse.
-        event.node.expand()
 
     def action_focus_search(self):
         self.query_one("#search", Input).focus()
