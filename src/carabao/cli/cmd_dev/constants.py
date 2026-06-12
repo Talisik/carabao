@@ -7,8 +7,11 @@ from rich.highlighter import JSONHighlighter
 #: Highlighter for pretty-printed JSON log payloads.
 JSON_HL = JSONHighlighter()
 
-#: Cap on rendered log entries, to keep full-pane rebuilds snappy.
-MAX_LINES = 2000
+#: Cap on retained log entries (only one PAGE_SIZE page renders at a time).
+MAX_LINES = 10000
+
+#: Log lines rendered per page — small, so text selection stays snappy.
+PAGE_SIZE = 200
 
 # Inline markdown: `code`, **bold**, ~~strike~~, *italic* / _italic_.
 MD_RE = re.compile(

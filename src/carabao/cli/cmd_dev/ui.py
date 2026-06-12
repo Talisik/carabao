@@ -12,6 +12,7 @@ import logging
 import os
 import sys
 import threading
+from collections import deque
 from datetime import datetime
 from time import monotonic
 from typing import Callable, Dict, List, Optional, Tuple
@@ -44,6 +45,7 @@ from .constants import (
     LEVEL_COLOR,
     LEVELS_OFF_BY_DEFAULT,
     MAX_LINES,
+    PAGE_SIZE,
     SPINNER,
 )
 from .utils import (
@@ -276,6 +278,10 @@ class UI(App):
         Binding("e", "next_tab", "Next tab"),
         Binding("c", "continue_lane", "Continue"),
         Binding("enter", "continue_lane", "Continue"),
+        Binding("left,left_square_bracket", "page(-1)", "Older logs"),
+        Binding("right,right_square_bracket", "page(1)", "Newer logs"),
+        Binding("up", "scroll_logs(-1)", "Scroll up"),
+        Binding("down", "scroll_logs(1)", "Scroll down"),
     ] + [
         # Number keys toggle the n-th level in the levels strip.
         Binding(str(digit), f"bar_item({digit})", show=False)
@@ -323,8 +329,20 @@ class UI(App):
         # (timestamp, level, message, source) — source is "module:func:line"
         # or None when the origin is unknown (l2l logger, print()).
         self._records: List[_LogRecord] = []
-        # Coalesce log re-renders to a timer (streaming bursts → ~10 fps).
-        self._log_dirty = False
+        # Buffer cap + page size, env-overridable (CARABAO_LOG_MAX_LINES /
+        # CARABAO_LOG_PAGE_SIZE), falling back to the constants.
+        from carabao.constants import C
+
+        self._max_lines = max(1, C("CARABAO_LOG_MAX_LINES", cast=int, default=MAX_LINES))
+        self._page_size = max(1, C("CARABAO_LOG_PAGE_SIZE", cast=int, default=PAGE_SIZE))
+        # Worker pushes log lines here (non-blocking); the flush timer drains
+        # them onto _records and re-renders at ~10 fps.
+        self._pending: deque = deque()
+        # Pagination: only one page renders at a time (cheap selection). When
+        # _follow is True the newest page is shown and tracks new logs; paging
+        # back pins _page and stops following.
+        self._follow = True
+        self._page = 0
         # Levels seen (with counts) and which are enabled. The filter checkboxes
         # are built fresh each time the filters modal opens.
         self._enabled_levels: set = set()
@@ -370,6 +388,8 @@ class UI(App):
                     # Hide the root — it's redundant with the tab name; primary
                     # lanes render at the top level instead.
                     tree.show_root = False
+                    # Tighter indentation (default 4) — keeps deep trees narrower.
+                    tree.guide_depth = 2
                     self._tree = tree
 
                     yield tree
@@ -399,6 +419,15 @@ class UI(App):
                         yield self._value_static
 
             with Vertical(id="logs"):
+                # One small page renders at a time (cheap text selection). Pager:
+                # "← X/Y →" on the left, line count on the right.
+                with Horizontal(id="pager"):
+                    self._pager_left = Static(id="pager-left")
+                    yield self._pager_left
+                    yield Static(id="pager-spacer")
+                    self._pager_right = Static(id="pager-right")
+                    yield self._pager_right
+
                 # A Static inside a scroll: Static emits selection offsets (so
                 # text is selectable/copyable, unlike RichLog) and lets us
                 # render pretty, highlighted JSON.
@@ -805,10 +834,9 @@ class UI(App):
         self.call_from_thread(self._apply_event, kind, payload)
 
     def _on_log(self, level: str, message: str, source: Optional[str] = None):
-        # Worker thread → marshal to the UI; ignore if the app is gone.
-        # loguru/stdlib pass an explicit source; for l2l logger and print() we
-        # recover the call site by walking the stack here (still on the worker
-        # thread, so the frames are the real caller).
+        # Runs on the worker thread. loguru/stdlib pass an explicit source; for
+        # l2l logger and print() we recover the call site by walking the stack
+        # here (the frames are the real caller).
         if source is None:
             source = self._origin_from_stack()
 
@@ -820,10 +848,10 @@ class UI(App):
         if self._log_fp is not None:
             self._write_log_file(level, message, source)
 
-        try:
-            self.call_from_thread(self._add_log, level, message, source)
-        except Exception:
-            pass
+        # Non-blocking hand-off: queue for the UI's flush timer. deque.append is
+        # thread-safe, and (unlike call_from_thread) never blocks the worker —
+        # so a flood of logs can't serialize the pipeline against the UI thread.
+        self._pending.append((datetime.now(), level, message, source))
 
     def _write_log_file(self, level: str, message: str, source: Optional[str]):
         # Stream a plain-text (ANSI-stripped) line to the log file.
@@ -1059,30 +1087,36 @@ class UI(App):
             if entry is not None:
                 self._render_node(entry)
 
-    def _add_log(self, level: str, message: str, source: Optional[str] = None):
-        first_sighting = level not in self._level_counts
-        self._level_counts[level] = self._level_counts.get(level, 0) + 1
-
-        # Enable a level by default the first time it's seen (TRACE excepted —
-        # it's noisy). The filter checkbox is built lazily by the filters modal.
-        if first_sighting and level not in LEVELS_OFF_BY_DEFAULT:
-            self._enabled_levels.add(level)
-
-        self._records.append(_LogRecord(datetime.now(), level, message, source))
-
-        if len(self._records) > MAX_LINES:
-            del self._records[: len(self._records) - MAX_LINES]
-
-        # Mark dirty; the actual render is coalesced in _flush_log.
-        self._log_dirty = True
-
     def _flush_log(self):
-        # Render at most ~10x/s regardless of how fast logs stream in.
-        if not self._log_dirty:
+        # Drain everything the worker queued since the last tick, then render
+        # once. Keeps the worker non-blocking (it never waits on the UI thread)
+        # so a flood of logs doesn't serialize the pipeline.
+        if not self._pending:
             return
 
-        self._log_dirty = False
-        self._render_log()
+        added = False
+
+        while self._pending:
+            try:
+                ts, level, message, source = self._pending.popleft()
+            except IndexError:
+                break
+
+            first_sighting = level not in self._level_counts
+            self._level_counts[level] = self._level_counts.get(level, 0) + 1
+
+            # Enable a level by default the first time it's seen (TRACE is noisy).
+            if first_sighting and level not in LEVELS_OFF_BY_DEFAULT:
+                self._enabled_levels.add(level)
+
+            self._records.append(_LogRecord(ts, level, message, source))
+            added = True
+
+        if len(self._records) > self._max_lines:
+            del self._records[: len(self._records) - self._max_lines]
+
+        if added:
+            self._render_log()
 
     def _invalidate_renders(self):
         # Drop cached per-line renders (e.g. a display toggle changed).
@@ -1157,20 +1191,77 @@ class UI(App):
         return inline_markdown(message)
 
     def _render_log(self):
-        lines = [
-            self._render_record(record)
+        # Filtered records, then slice to the current page (only the page is
+        # rendered — keeps selection/scroll cheap regardless of buffer size).
+        visible = [
+            record
             for record in self._records
             if self._passes_filter(record.level, record.message)
         ]
 
+        total = len(visible)
+        size = self._page_size
+        pages = max(1, (total + size - 1) // size)
+
+        # End-aligned windows: page 0 = newest (a full, sliding tail of the last
+        # `size` lines — no reset-to-1-line jump); higher pages tile backward,
+        # only the oldest page is partial.
+        if self._follow:
+            self._page = 0
+        else:
+            self._page = max(0, min(self._page, pages - 1))
+
+        end = total - self._page * size
+        start = max(0, end - size)
+        page_records = visible[start:end]
+
+        lines = [self._render_record(record) for record in page_records]
         content = Text("\n").join(lines) if lines else Text("")
+
         # Keep the plain text for word/line selection boundary lookups.
         self._log_static.plain_text = content.plain
-
         self._log_static.update(content)
+        self._render_pager(self._page, pages, total)
 
-        if self._autoscroll:
+        if self._follow and self._autoscroll:
             self._log_view.scroll_end(animate=False)
+
+    def _render_pager(self, page: int, pages: int, total: int):
+        # page is the distance back from newest (0 = newest).
+        if pages <= 1:
+            self._pager_left.update(Text(""))
+        else:
+            older = page < pages - 1  # ← can go older
+            newer = page > 0  # → can go newer
+
+            left = Text()
+            left.append("← ", style="#3b82f6" if older else "bright_black")
+            left.append(f"{pages - page}/{pages}", style="bold #3b82f6")
+            left.append(" →", style="#3b82f6" if newer else "bright_black")
+
+            self._pager_left.update(left)
+
+        self._pager_right.update(Text(f"{total} lines", style="bright_black"))
+
+    def action_page(self, delta: int):
+        # delta = -1 (older, ←) / +1 (newer, →). page is distance-from-newest,
+        # so older increases it. Reaching page 0 resumes follow (live tail).
+        visible = sum(
+            1
+            for record in self._records
+            if self._passes_filter(record.level, record.message)
+        )
+        pages = max(1, (visible + self._page_size - 1) // self._page_size)
+        target = max(0, min(self._page - delta, pages - 1))
+
+        self._page = target
+        self._follow = target == 0
+
+        self._render_log()
+
+    def action_scroll_logs(self, delta: int):
+        # Scroll the current page up/down a line.
+        self._log_view.scroll_relative(y=delta, animate=False)
 
     def _refilter(self):
         self._render_log()
@@ -1271,11 +1362,11 @@ class UI(App):
 
         out.append("esc/d back   ", style="bright_black")
 
-        for _label, _option, hotkey, attr in _DISPLAY_TOGGLES:
+        for label, _option, hotkey, attr in _DISPLAY_TOGGLES:
             on = getattr(self, attr)
 
             out.append(f"{hotkey} ", style="bold")
-            out.append(f"{_label}   ", style="#3b82f6" if on else "bright_black")
+            out.append(f"{label}   ", style="#3b82f6" if on else "bright_black")
 
         return out
 

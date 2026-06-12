@@ -13,6 +13,10 @@ Screen { background: transparent; }
 #logs { width: 1fr; margin-left: 2; background: transparent; }
 /* Thin border puts the text on the inner row → vertically centered. */
 #search { width: 1fr; background: transparent; border: round $accent; height: auto; margin-bottom: 1; }
+#pager { height: 1; background: transparent; margin-bottom: 1; }
+#pager-left { width: auto; color: $text-muted; }
+#pager-spacer { width: 1fr; }
+#pager-right { width: auto; color: $text-muted; }
 #log { height: 1fr; background: transparent; }
 #log-content { width: 1fr; height: auto; background: transparent; }
 Tree { background: transparent; }

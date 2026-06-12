@@ -136,6 +136,8 @@ Carabao uses the following environment variables:
 -   `CARABAO_START_WITH_ERROR`: Whether to start even if errors occurred
 -   `SINGLE_RUN`: Run once then exit if `True`
 -   `TESTING`: Enable debug logging if `True`
+-   `CARABAO_LOG_MAX_LINES`: Dev UI log buffer size (default `10000`)
+-   `CARABAO_LOG_PAGE_SIZE`: Dev UI log lines rendered per page (default `200`)
 
 ### Environment Files
 
