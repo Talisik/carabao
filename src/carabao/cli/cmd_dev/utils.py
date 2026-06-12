@@ -7,14 +7,23 @@ from rich.text import Text
 from .constants import MD_RE, MD_STYLE
 
 
+def _fmt_bytes(n: int) -> str:
+    """Human-readable byte size: 42 B, 1.2 KB, 3.4 MB."""
+    for divisor, suffix in ((1 << 20, "MB"), (1 << 10, "KB")):
+        if n >= divisor:
+            return f"{n / divisor:.1f} {suffix}"
+    return f"{n} B"
+
+
 def format_value(value, max_len: int = 4000):
     """Summarize a value flowing between lanes for the Values tab.
 
-    Returns ``(meta, body)``: ``meta`` is the type name plus size when the value
-    has a ``len`` (e.g. ``dict · 5``); ``body`` is pretty JSON when the value is
-    JSON-serializable, otherwise its ``repr``. Generators are never iterated —
-    ``json.dumps`` rejects them, so they fall through to ``repr`` (e.g.
-    ``<generator object …>``). ``body`` is truncated to ``max_len`` chars.
+    Returns ``(meta, body)``: ``meta`` is the type name, its ``len`` when it has
+    one (e.g. ``dict · 5``), and the serialized byte size (e.g. ``· 1.2 KB``);
+    ``body`` is pretty JSON when the value is JSON-serializable, otherwise its
+    ``repr``. Generators are never iterated — ``json.dumps`` rejects them, so
+    they fall through to ``repr`` (e.g. ``<generator object …>``). ``body`` is
+    truncated to ``max_len`` chars.
     """
     type_name = type(value).__name__
 
@@ -24,7 +33,6 @@ def format_value(value, max_len: int = 4000):
             size = len(value)
         except Exception:
             size = None
-    meta = type_name if size is None else f"{type_name} · {size}"
 
     try:
         # No `default=` so non-serializable values (incl. generators) raise and
@@ -32,6 +40,10 @@ def format_value(value, max_len: int = 4000):
         body = json.dumps(value, indent=2, ensure_ascii=False)
     except (TypeError, ValueError):
         body = repr(value)
+
+    nbytes = len(body.encode("utf-8"))
+    meta = type_name if size is None else f"{type_name} · {size}"
+    meta = f"{meta} · {_fmt_bytes(nbytes)}"
 
     if len(body) > max_len:
         body = f"{body[:max_len]}… (+{len(body) - max_len} chars)"

@@ -144,7 +144,6 @@ def dev(
             ),
             title=result.name,
             lanes=[result.lane],
-            dev_mode=True,
             test_mode=result.test_mode,
         ).run()
     else:

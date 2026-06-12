@@ -32,6 +32,9 @@ LEVEL_COLOR = {
     "PRINT": "white",
 }
 
+#: Log levels whose filter checkbox starts unchecked (noisy by nature).
+LEVELS_OFF_BY_DEFAULT = {"TRACE"}
+
 #: Spinner frames for active lanes.
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 

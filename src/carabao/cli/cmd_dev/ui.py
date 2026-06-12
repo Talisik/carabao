@@ -41,6 +41,7 @@ from .constants import (
     HOTKEYS_RUNNING,
     JSON_HL,
     LEVEL_COLOR,
+    LEVELS_OFF_BY_DEFAULT,
     MAX_LINES,
     SPINNER,
 )
@@ -155,7 +156,6 @@ class UI(App):
         runner: Callable[[], None],
         title: str = "Lane UI",
         lanes: Optional[list] = None,
-        dev_mode: bool = True,
         test_mode: bool = False,
     ):
         # ansi_color=True renders with the terminal's own ANSI palette + default
@@ -165,7 +165,6 @@ class UI(App):
         super().__init__(ansi_color=True)
         self._runner = runner
         self._run_title = title
-        self._dev_mode = dev_mode
         self._test_mode = test_mode
         # Primary lane class(es) to pre-lay the structural tree from.
         self._structure_lanes = lanes or []
@@ -178,8 +177,8 @@ class UI(App):
         self._active: set = set()
         # run_ids currently parked at a breakpoint (dev-only).
         self._paused: set = set()
-        # Latest value emitted per lane name -> (meta, body), for the Values tab.
-        self._values: Dict[str, Tuple[str, str]] = {}
+        # Latest value handed downstream (meta, body), for the Values tab.
+        self._latest_value: Optional[Tuple[str, str]] = None
         self._records: List[Tuple[datetime, str, str]] = []
         # Level filter checkboxes are created on first sighting of each level
         # (so a level with no logs shows no checkbox), labeled with a count.
@@ -226,19 +225,23 @@ class UI(App):
                     self._tree = tree
                     yield tree
 
-                with TabPane("Environment", id="tab-env"):
+                with TabPane("Env", id="tab-env"):
                     with VerticalScroll(id="env"):
                         self._env_file = Static(id="env-file")
                         yield self._env_file
                         # A Static of aligned Text (not a DataTable) so the
                         # values are selectable/copyable, like the log pane.
-                        self._env_table = Static(id="env-table", markup=False)
+                        self._env_table = Static(
+                            id="env-table",
+                            markup=False,
+                        )
                         yield self._env_table
 
                 with TabPane("Values", id="tab-values"):
                     with VerticalScroll(id="values"):
                         self._values_static = Static(
-                            id="values-content", markup=False
+                            id="values-content",
+                            markup=False,
                         )
                         yield self._values_static
 
@@ -246,28 +249,40 @@ class UI(App):
                 # A Static inside a scroll: Static emits selection offsets (so
                 # text is selectable/copyable, unlike RichLog) and lets us
                 # render pretty, highlighted JSON.
-                self._log_view = VerticalScroll(id="log")
+                self._log_view = VerticalScroll(
+                    id="log",
+                )
+
                 with self._log_view:
-                    self._log_static = Static(id="log-content", markup=False)
+                    self._log_static = Static(
+                        id="log-content",
+                        markup=False,
+                    )
                     yield self._log_static
 
         # Bottom bar: hotkeys (left) … mode + timer (right).
         with Horizontal(id="bottombar"):
-            self._hotkeys = Static(HOTKEYS_RUNNING, id="hotkeys")
+            self._hotkeys = Static(
+                HOTKEYS_RUNNING,
+                id="hotkeys",
+            )
             yield self._hotkeys
             yield Static(id="bottombar-spacer")
             yield Static(self._mode_text(), id="mode")
-            self._status_bar = Static("Running…", id="status")
+            self._status_bar = Static(
+                "Running…",
+                id="status",
+            )
             yield self._status_bar
 
     def _mode_text(self) -> str:
-        parts = []
-        if self._dev_mode:
-            parts.append("[b yellow]DEV[/]")
-        else:
-            parts.append("[b green]RELEASE[/]")
+        # The UI only ever runs under `moo dev`, so the mode is always DEV
+        # (optionally TEST when test mode is on).
+        parts = ["[b yellow]DEV[/]"]
+
         if self._test_mode:
             parts.append("[b blue]TEST[/]")
+
         return "  ".join(parts)
 
     def _refresh_env(self):
@@ -300,30 +315,22 @@ class UI(App):
         self._env_table.update(table)
 
     def _record_value(self, name, value):
-        # Latest value each lane handed downstream (Values tab).
-        if not name:
-            return
-        meta, body = format_value(value)
-        self._values[name] = (meta, body)
+        # Only the latest value flowing through the pipeline (Values tab).
+        self._latest_value = format_value(value)
         self._render_values()
 
     def _render_values(self):
-        if not self._values:
+        if self._latest_value is None:
             self._values_static.update(Text(""))
             return
 
+        meta, body = self._latest_value
         out = Text()
-        for i, name in enumerate(self._values):
-            meta, body = self._values[name]
-            if i:
-                out.append("\n")
-            out.append(name, style="bold #3b82f6")
-            out.append(f"  {meta}\n", style="bright_black")
-            body_text = Text(body)
-            if body[:1] in "{[":  # highlight JSON payloads
-                JSON_HL.highlight(body_text)
-            out.append(body_text)
-            out.append("\n")
+        out.append(f"{meta}\n", style="bright_black")
+        body_text = Text(body)
+        if body[:1] in "{[":  # highlight JSON payloads
+            JSON_HL.highlight(body_text)
+        out.append(body_text)
         self._values_static.update(out)
 
     def on_mount(self):
@@ -519,7 +526,9 @@ class UI(App):
         # whole plan shows up front; running lanes then highlight their node.
         for lane_cls in self._structure_lanes:
             try:
-                self._add_struct_node(lane_cls, self._tree.root, self._struct_roots, set())
+                self._add_struct_node(
+                    lane_cls, self._tree.root, self._struct_roots, set()
+                )
             except Exception:
                 pass
 
@@ -555,7 +564,9 @@ class UI(App):
             return entry
 
         parent = self._run_to_node.get(parent_id) if parent_id else None
-        siblings = self._struct_children.get(id(parent)) if parent else self._struct_roots
+        siblings = (
+            self._struct_children.get(id(parent)) if parent else self._struct_roots
+        )
 
         match = siblings.get(name) if siblings else None
         if match is not None and id(match) not in self._claimed:
@@ -686,8 +697,11 @@ class UI(App):
         checkbox = self._level_checkboxes.get(level)
 
         if checkbox is None:
-            self._enabled_levels.add(level)
-            checkbox = _Checkbox(label, value=True, name=level)
+            # TRACE is noisy (lane lifecycle + watchers) — off by default.
+            on = level not in LEVELS_OFF_BY_DEFAULT
+            if on:
+                self._enabled_levels.add(level)
+            checkbox = _Checkbox(label, value=on, name=level)
             self._level_checkboxes[level] = checkbox
             try:
                 self.query_one("#filters").mount(
@@ -801,9 +815,7 @@ class UI(App):
         # Reflect paused state in the bottom bar (skip once the run is done).
         if self._finished:
             return
-        self._hotkeys.update(
-            HOTKEYS_PAUSED if self._paused else HOTKEYS_RUNNING
-        )
+        self._hotkeys.update(HOTKEYS_PAUSED if self._paused else HOTKEYS_RUNNING)
 
     def action_continue_lane(self):
         # Release every lane parked at a breakpoint.
