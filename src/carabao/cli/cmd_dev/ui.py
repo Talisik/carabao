@@ -187,7 +187,6 @@ class _ConfirmQuit(ModalScreen[bool]):
         border: round $accent; background: $surface;
     }
     #confirm-box Label { width: 100%; text-align: center; margin-bottom: 1; }
-    #confirm-hint { color: $text-muted; margin-top: 1; margin-bottom: 0; }
     #confirm-buttons { height: auto; align: center middle; }
     #confirm-buttons Button { margin: 0 1; border: none; height: 3; content-align: center middle; color: white; text-style: bold; }
     #confirm-yes { background: #f85149; }
@@ -207,10 +206,8 @@ class _ConfirmQuit(ModalScreen[bool]):
             yield Label("Pipeline is still running.\nQuit anyway?")
 
             with Horizontal(id="confirm-buttons"):
-                yield Button("Quit (y)", variant="error", id="confirm-yes")
-                yield Button("Cancel (n)", variant="primary", id="confirm-no")
-
-            yield Label("y quit   ·   n / esc cancel", id="confirm-hint")
+                yield Button("[y] Quit", variant="error", id="confirm-yes")
+                yield Button("[n] Cancel", variant="primary", id="confirm-no")
 
     @on(Button.Pressed, "#confirm-yes")
     def _yes(self):
@@ -265,6 +262,7 @@ class UI(App):
         Binding("q", "prev_tab", "Prev tab"),
         Binding("e", "next_tab", "Next tab"),
         Binding("c", "continue_lane", "Continue"),
+        Binding("enter", "continue_lane", "Continue"),
     ] + [
         # Number keys toggle the n-th item in the active filter strip.
         Binding(str(digit), f"bar_item({digit})", show=False)
