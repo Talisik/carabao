@@ -92,14 +92,19 @@ class _ConfirmQuit(ModalScreen[bool]):
     """Confirmation shown when quitting while the pipeline is still running."""
 
     CSS = """
+    $accent: #3b82f6;
     _ConfirmQuit { align: center middle; }
     #confirm-box {
         width: 48; height: auto; padding: 1 2;
-        border: round $warning; background: $surface;
+        border: round $accent; background: $surface;
     }
     #confirm-box Label { width: 100%; text-align: center; margin-bottom: 1; }
     #confirm-buttons { height: auto; align: center middle; }
-    #confirm-buttons Button { margin: 0 1; }
+    #confirm-buttons Button { margin: 0 1; border: none; color: white; text-style: bold; }
+    #confirm-yes { background: #f85149; }
+    #confirm-yes:hover { background: #ff6b61; }
+    #confirm-no { background: $accent; }
+    #confirm-no:hover { background: #5a9bf8; }
     """
 
     BINDINGS = [
@@ -177,6 +182,10 @@ class UI(App):
         self._active: set = set()
         # run_ids currently parked at a breakpoint (dev-only).
         self._paused: set = set()
+        # Timer freezes while paused: total seconds spent paused, plus the
+        # monotonic time the current pause began (None when not paused).
+        self._paused_total = 0.0
+        self._pause_started: Optional[float] = None
         # Latest value handed downstream (meta, body), for the Value tab.
         self._latest_value: Optional[Tuple[str, str]] = None
         self._records: List[Tuple[datetime, str, str]] = []
@@ -470,7 +479,7 @@ class UI(App):
         except Exception:
             pass
 
-        elapsed = fmt_elapsed(monotonic() - self._start_monotonic)
+        elapsed = fmt_elapsed(self._elapsed())
         if error_text is not None:
             final = Text(f"Error: {error_text}", style="bold red")
         else:
@@ -488,12 +497,19 @@ class UI(App):
         except Exception:
             pass
 
+    def _elapsed(self) -> float:
+        # Wall-clock since start, excluding time parked at breakpoints. While
+        # paused the clock is pinned to when the pause began.
+        end = self._pause_started if self._pause_started is not None else monotonic()
+        return end - self._start_monotonic - self._paused_total
+
     def _update_status(self):
         # Live elapsed timer while running; the final ✓/✕ is set on completion.
         if self._finished:
             return
-        elapsed = fmt_elapsed(monotonic() - self._start_monotonic)
-        self._status_bar.update(Text(elapsed, style="bold yellow"))
+        # Amber while frozen at a breakpoint, yellow while running.
+        style = "bold #fbbf24" if self._pause_started is not None else "bold yellow"
+        self._status_bar.update(Text(fmt_elapsed(self._elapsed()), style=style))
 
     def _finalize_active(self):
         for run_id in list(self._active):
@@ -631,12 +647,19 @@ class UI(App):
             )
             entry.state = "paused"
             self._active.discard(run_id)
+            # Freeze the timer at the first concurrent pause.
+            if not self._paused:
+                self._pause_started = monotonic()
             self._paused.add(run_id)
             self._render_node(entry)
             self._sync_hotkeys()
 
         elif kind == "lane_resumed":
             self._paused.discard(run_id)
+            # Resume the timer once nothing is paused anymore.
+            if not self._paused and self._pause_started is not None:
+                self._paused_total += monotonic() - self._pause_started
+                self._pause_started = None
             entry = self._run_to_node.get(run_id)
             if entry is not None:
                 # Back to running — process() continues after the breakpoint.
@@ -660,8 +683,8 @@ class UI(App):
             label = f"{name}{secs}"
         elif entry.state == "terminated":
             label = f"[red]✕[/] {name}"
-        else:
-            label = f"[bright_black]·[/] {name}"
+        else:  # pending — dim, no leading marker
+            label = f"[bright_black]{name}[/]"
 
         entry.node.set_label(label)
 

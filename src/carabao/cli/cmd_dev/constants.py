@@ -30,6 +30,7 @@ LEVEL_COLOR = {
     "SUCCESS": "green",
     "TRACE": "bright_black",
     "PRINT": "white",
+    "PAUSE": "bold #fbbf24",  # amber, matches the ⏸ marker
 }
 
 #: Log levels whose filter checkbox starts unchecked (noisy by nature).
