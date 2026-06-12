@@ -230,8 +230,9 @@ class Core:
                 pass
 
         # lane2lane ships its own toggleable logger (no longer loguru-based);
-        # gate its verbosity the same way: debug in dev, info otherwise.
-        l2l_logger.set_level("DEBUG" if C.IN_DEVELOPMENT else "INFO")
+        # gate its verbosity: lane lifecycle logs at TRACE, so show TRACE in dev,
+        # info otherwise.
+        l2l_logger.set_level("TRACE" if C.IN_DEVELOPMENT else "INFO")
 
         settings = Settings.get()
 

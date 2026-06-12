@@ -51,7 +51,7 @@ class NetworkWatcher(Lane):
     """
 
     debug_logger: Optional[Callable[[str], Any]] = lambda x: (
-        logger.debug(x) if logger is not None else print(x)
+        logger.trace(x) if logger is not None else print(x)
     )
     info_logger: Optional[Callable[[str], Any]] = lambda x: (
         logger.info(x) if logger is not None else print(x)

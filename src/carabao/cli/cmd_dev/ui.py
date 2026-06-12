@@ -10,7 +10,6 @@ Launched from the dev command when the "📊 UI" switch is on.
 import json
 import logging
 import os
-import re
 import sys
 import threading
 from datetime import datetime
@@ -18,7 +17,6 @@ from time import monotonic
 from typing import Callable, Dict, List, Optional, Tuple
 
 from l2l import events, logger
-from rich.highlighter import JSONHighlighter
 from rich.text import Text
 from textual import on
 from textual.app import App
@@ -28,7 +26,6 @@ from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
     Checkbox,
-    DataTable,
     Input,
     Label,
     Static,
@@ -38,96 +35,16 @@ from textual.widgets import (
 )
 from textual.widgets.tree import TreeNode
 
-_JSON_HL = JSONHighlighter()
-_MAX_LINES = 2000  # cap rendered log entries to keep rebuilds snappy
-
-# Inline markdown: `code`, **bold**, ~~strike~~, *italic* / _italic_.
-_MD_RE = re.compile(
-    r"(?P<code>`[^`]+`)"
-    r"|(?P<bold>\*\*[^*]+\*\*)"
-    r"|(?P<strike>~~[^~]+~~)"
-    # underscore italics require word boundaries so path/to_file_name is safe
-    r"|(?P<italic>\*[^*\s][^*]*\*|(?<!\w)_[^_\s][^_]*_(?!\w))"
+from .constants import (
+    HOTKEYS_DONE,
+    HOTKEYS_PAUSED,
+    HOTKEYS_RUNNING,
+    JSON_HL,
+    LEVEL_COLOR,
+    MAX_LINES,
+    SPINNER,
 )
-_MD_STYLE = {"code": "cyan", "bold": "bold", "strike": "strike", "italic": "italic"}
-
-
-def _fmt_elapsed(seconds: float) -> str:
-    """Compact elapsed time: 6.8s, 8m, 1h."""
-    if seconds < 60:
-        return f"{seconds:.1f}s"
-    if seconds < 3600:
-        return f"{int(seconds // 60)}m"
-    return f"{int(seconds // 3600)}h"
-
-
-def _abbrev_count(n: int) -> str:
-    """Compact integer: 50, 5K, 1M, 2B (no decimals)."""
-    for divisor, suffix in ((1_000_000_000, "B"), (1_000_000, "M"), (1_000, "K")):
-        if n >= divisor:
-            return f"{n // divisor}{suffix}"
-    return str(n)
-
-
-def _inline_markdown(text: str) -> Text:
-    """Render inline markdown (bold/italic/code/strike) as styled Text.
-
-    Block markdown is intentionally not handled — keeps the log selectable and
-    avoids mangling plain log lines.
-    """
-    out = Text()
-    pos = 0
-
-    for match in _MD_RE.finditer(text):
-        if match.start() > pos:
-            out.append(text[pos : match.start()])
-
-        kind = match.lastgroup
-        token = match.group()
-        pos = match.end()
-
-        if kind is None:  # shouldn't happen (a named group always matches)
-            out.append(token)
-            continue
-
-        inner = token[1:-1] if kind in ("code", "italic") else token[2:-2]
-        out.append(inner, style=_MD_STYLE[kind])
-
-    if pos < len(text):
-        out.append(text[pos:])
-
-    return out
-
-
-# Noisy third-party loggers muted to WARNING while the UI runs, so the root
-# logger can be DEBUG (to surface the user's own logs) without flooding the
-# pane (e.g. pymongo command monitoring emits DEBUG JSON per operation).
-_NOISY_LOGGERS = (
-    "pymongo",
-    "urllib3",
-    "asyncio",
-    "elasticsearch",
-    "elastic_transport",
-    "botocore",
-    "s3transfer",
-    "kafka",
-    "redis",
-)
-
-_LEVEL_COLOR = {
-    "DEBUG": "bright_black",
-    "INFO": "cyan",
-    "WARNING": "yellow",
-    "ERROR": "bold red",
-    "CRITICAL": "bold red",
-    "SUCCESS": "green",
-    "TRACE": "bright_black",
-    "PRINT": "white",
-}
-_SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-_HOTKEYS_RUNNING = "[b]esc[/] quit   [b]/[/] search"
-# Highlight "esc quit" once the pipeline is done — the user can safely exit.
-_HOTKEYS_DONE = "[b #ff4d4d]esc quit[/]   [b]/[/] search"
+from .utils import abbrev_count, fmt_elapsed, format_value, inline_markdown
 
 
 class _LogWriter:
@@ -225,53 +142,12 @@ class _NodeState:
 class UI(App):
     """Runs ``runner`` in a worker thread and visualizes lane activity."""
 
-    CSS = """
-    $accent: #3b82f6;
-    Screen { background: transparent; }
-    #body { height: 1fr; background: transparent; }
-    #left { width: 25%; border-right: solid $accent; background: transparent; }
-    #left Tabs { background: transparent; }
-    #left ContentSwitcher, #left TabPane { background: transparent; padding: 0; }
-    #tree { background: transparent; }
-    #env { background: transparent; }
-    #env-file { width: 1fr; height: auto; background: transparent; padding: 0 1; }
-    #env-table { width: 1fr; height: auto; background: transparent; }
-    #env-table > .datatable--header { background: transparent; color: $accent; text-style: bold; }
-    #env-table > .datatable--cursor { background: transparent; }
-    #env-table > .datatable--hover { background: transparent; }
-    #env-table > .datatable--even-row,
-    #env-table > .datatable--odd-row { background: transparent; }
-    #logs { width: 1fr; margin-left: 2; background: transparent; }
-    #filters { height: auto; padding: 0 1; background: transparent; }
-    #filters-spacer { width: 1fr; height: 1; background: transparent; }
-    #filters Checkbox { width: auto; height: 1; border: none; padding: 0; margin-right: 2; background: transparent; }
-    #filters Checkbox > .toggle--button { background: transparent; color: $panel; }
-    #filters Checkbox.-on > .toggle--button { background: transparent; color: $text-success; }
-    /* Thin border puts the text on the inner row → vertically centered. */
-    #search { width: 1fr; background: transparent; border: round $accent; height: auto; margin-bottom: 1; }
-    #log { height: 1fr; background: transparent; }
-    #log-content { width: 1fr; height: auto; background: transparent; }
-    Tree { background: transparent; }
-
-    /* Live tree: guides always visible, no hover/cursor line highlight. */
-    #tree > .tree--guides,
-    #tree > .tree--guides-hover,
-    #tree > .tree--guides-selected { color: $accent; text-style: none; }
-    #tree > .tree--cursor,
-    #tree > .tree--highlight,
-    #tree > .tree--highlight-line { background: transparent; text-style: none; }
-
-    /* Bottom bar: hotkeys (left) … mode + timer (right). */
-    #bottombar { dock: bottom; height: 1; margin-top: 1; background: transparent; }
-    #hotkeys { width: auto; color: $text-muted; }
-    #bottombar-spacer { width: 1fr; }
-    #mode { width: auto; margin-right: 2; }
-    #status { width: auto; color: $text-muted; }
-    """
+    CSS_PATH = "ui.tcss"
 
     BINDINGS = [
         Binding("escape", "request_quit", "Quit", priority=True),
         Binding("slash", "focus_search", "Search"),
+        Binding("c", "continue_lane", "Continue"),
     ]
 
     def __init__(
@@ -300,6 +176,10 @@ class UI(App):
         self._struct_children: Dict[int, Dict[str, _NodeState]] = {}
         self._claimed: set = set()
         self._active: set = set()
+        # run_ids currently parked at a breakpoint (dev-only).
+        self._paused: set = set()
+        # Latest value emitted per lane name -> (meta, body), for the Values tab.
+        self._values: Dict[str, Tuple[str, str]] = {}
         self._records: List[Tuple[datetime, str, str]] = []
         # Level filter checkboxes are created on first sighting of each level
         # (so a level with no logs shows no checkbox), labeled with a count.
@@ -350,15 +230,17 @@ class UI(App):
                     with VerticalScroll(id="env"):
                         self._env_file = Static(id="env-file")
                         yield self._env_file
-                        table: DataTable = DataTable(
-                            id="env-table",
-                            zebra_stripes=False,
-                            cursor_type="none",
+                        # A Static of aligned Text (not a DataTable) so the
+                        # values are selectable/copyable, like the log pane.
+                        self._env_table = Static(id="env-table", markup=False)
+                        yield self._env_table
+
+                with TabPane("Values", id="tab-values"):
+                    with VerticalScroll(id="values"):
+                        self._values_static = Static(
+                            id="values-content", markup=False
                         )
-                        table.add_column("KEY")
-                        table.add_column("VALUE")
-                        self._env_table = table
-                        yield table
+                        yield self._values_static
 
             with Vertical(id="logs"):
                 # A Static inside a scroll: Static emits selection offsets (so
@@ -371,7 +253,7 @@ class UI(App):
 
         # Bottom bar: hotkeys (left) … mode + timer (right).
         with Horizontal(id="bottombar"):
-            self._hotkeys = Static(_HOTKEYS_RUNNING, id="hotkeys")
+            self._hotkeys = Static(HOTKEYS_RUNNING, id="hotkeys")
             yield self._hotkeys
             yield Static(id="bottombar-spacer")
             yield Static(self._mode_text(), id="mode")
@@ -404,14 +286,45 @@ class UI(App):
         header.append(", ".join(files) if files else "—", style="bold #3b82f6")
         self._env_file.update(header)
 
-        table = self._env_table
-        table.clear()
-        for key in sorted(mentioned_keys):
-            value = mentioned_keys[key]
-            table.add_row(
-                Text(key, style="cyan"),
-                Text("—" if value is None else str(value)),
-            )
+        keys = sorted(mentioned_keys)
+        table = Text()
+        if keys:
+            width = max(len(key) for key in keys)
+            table.append(f"{'KEY':<{width}}  ", style="bold #3b82f6")
+            table.append("VALUE\n", style="bold #3b82f6")
+            for key in keys:
+                value = mentioned_keys[key]
+                table.append(f"{key:<{width}}  ", style="cyan")
+                table.append("—" if value is None else str(value))
+                table.append("\n")
+        self._env_table.update(table)
+
+    def _record_value(self, name, value):
+        # Latest value each lane handed downstream (Values tab).
+        if not name:
+            return
+        meta, body = format_value(value)
+        self._values[name] = (meta, body)
+        self._render_values()
+
+    def _render_values(self):
+        if not self._values:
+            self._values_static.update(Text(""))
+            return
+
+        out = Text()
+        for i, name in enumerate(self._values):
+            meta, body = self._values[name]
+            if i:
+                out.append("\n")
+            out.append(name, style="bold #3b82f6")
+            out.append(f"  {meta}\n", style="bright_black")
+            body_text = Text(body)
+            if body[:1] in "{[":  # highlight JSON payloads
+                JSON_HL.highlight(body_text)
+            out.append(body_text)
+            out.append("\n")
+        self._values_static.update(out)
 
     def on_mount(self):
         self.title = self._run_title
@@ -421,6 +334,8 @@ class UI(App):
         self._prev_stream = logger._stream
         logger.set_stream(self._null)
         events.subscribe(self._on_event)
+        # Dev-only: arm breakpoints so lane.breakpoint() calls pause here.
+        events.enable_breakpoints()
         logger.add_sink(self._on_log)
         self._bridge_loguru()
         self._bridge_logging()
@@ -436,6 +351,8 @@ class UI(App):
         self._worker.start()
 
     def on_unmount(self):
+        # Release anything parked at a breakpoint so the worker thread can end.
+        events.disable_breakpoints()
         events.unsubscribe(self._on_event)
         logger.remove_sink(self._on_log)
 
@@ -453,10 +370,6 @@ class UI(App):
             root = logging.getLogger()
             for handler in getattr(self, "_detached_handlers", []):
                 root.addHandler(handler)
-            if hasattr(self, "_prev_root_level"):
-                root.setLevel(self._prev_root_level)
-            for name, level in getattr(self, "_muted_levels", {}).items():
-                logging.getLogger(name).setLevel(level)
 
         if hasattr(self, "_prev_stream"):
             logger.set_stream(self._prev_stream)
@@ -484,7 +397,8 @@ class UI(App):
 
             loguru_logger.remove()  # drop the default stderr handler
             self._loguru_removed = True
-            self._loguru_id = loguru_logger.add(sink, level="DEBUG")
+            # TRACE so the watchers' trace-level logs reach the pane (TRACE < DEBUG).
+            self._loguru_id = loguru_logger.add(sink, level="TRACE")
         except Exception:
             pass
 
@@ -493,19 +407,13 @@ class UI(App):
         ones with ``propagate=False`` (e.g. OpenTelemetry's direct logger).
 
         Works by tapping ``Logger.callHandlers`` (called once per record, after
-        level filtering), so it doesn't depend on root propagation. Root is set
-        to DEBUG and noisy libraries muted; existing root console handlers are
-        detached to avoid painting over the TUI.
+        level filtering), so it doesn't depend on root propagation. Logger levels
+        are left untouched, so the pane shows exactly what a normal terminal
+        would (a record only reaches the tap if it passed its logger's level) —
+        no flood from chatty libraries, no need to mute anything. Existing root
+        console handlers are detached so libraries can't paint over the TUI.
         """
         root = logging.getLogger()
-        self._prev_root_level = root.level
-        root.setLevel(logging.DEBUG)
-        self._muted_levels = {}
-        for name in _NOISY_LOGGERS:
-            noisy = logging.getLogger(name)
-            self._muted_levels[name] = noisy.level
-            noisy.setLevel(logging.WARNING)
-
         self._detached_handlers = [
             h for h in list(root.handlers) if isinstance(h, logging.StreamHandler)
         ]
@@ -558,7 +466,7 @@ class UI(App):
         except Exception:
             pass
 
-        elapsed = _fmt_elapsed(monotonic() - self._start_monotonic)
+        elapsed = fmt_elapsed(monotonic() - self._start_monotonic)
         if error_text is not None:
             final = Text(f"Error: {error_text}", style="bold red")
         else:
@@ -572,7 +480,7 @@ class UI(App):
             # generators that were abandoned before fully draining.
             self.call_from_thread(self._finalize_active)
             self.call_from_thread(self._status_bar.update, final)
-            self.call_from_thread(self._hotkeys.update, _HOTKEYS_DONE)
+            self.call_from_thread(self._hotkeys.update, HOTKEYS_DONE)
         except Exception:
             pass
 
@@ -580,7 +488,7 @@ class UI(App):
         # Live elapsed timer while running; the final ✓/✕ is set on completion.
         if self._finished:
             return
-        elapsed = _fmt_elapsed(monotonic() - self._start_monotonic)
+        elapsed = fmt_elapsed(monotonic() - self._start_monotonic)
         self._status_bar.update(Text(elapsed, style="bold yellow"))
 
     def _finalize_active(self):
@@ -687,6 +595,8 @@ class UI(App):
                 entry.work = payload.get("work")
                 self._active.discard(run_id)
                 self._render_node(entry)
+            if "value" in payload:
+                self._record_value(payload.get("name"), payload["value"])
 
         elif kind == "lane_done":
             entry = self._run_to_node.get(run_id)
@@ -707,17 +617,39 @@ class UI(App):
                 self._active.discard(run_id)
                 self._render_node(entry)
 
+        elif kind == "lane_breakpoint":
+            entry = self._node_for(
+                run_id, payload.get("name"), payload.get("parent_id")
+            )
+            entry.state = "paused"
+            self._active.discard(run_id)
+            self._paused.add(run_id)
+            self._render_node(entry)
+            self._sync_hotkeys()
+
+        elif kind == "lane_resumed":
+            self._paused.discard(run_id)
+            entry = self._run_to_node.get(run_id)
+            if entry is not None:
+                # Back to running — process() continues after the breakpoint.
+                entry.state = "active"
+                self._active.add(run_id)
+                self._render_node(entry)
+            self._sync_hotkeys()
+
     def _render_node(self, entry: _NodeState):
         name = entry.name
 
         if entry.state == "active":
-            frame = _SPINNER[self._frame % len(_SPINNER)]
-            label = f"[#3b82f6]{frame}[/] [bold]{name}[/]"
+            frame = SPINNER[self._frame % len(SPINNER)]
+            label = f"[bold]{name}[/] [#3b82f6]{frame}[/]"
+        elif entry.state == "paused":
+            label = f"[bold]{name}[/] [#fbbf24]⏸[/]"
         elif entry.state == "done":
             secs = (
                 f" [bright_black]{entry.work:.2f}s[/]" if entry.work is not None else ""
             )
-            label = f"[green]✓[/] {name}{secs}"
+            label = f"{name}{secs}"
         elif entry.state == "terminated":
             label = f"[red]✕[/] {name}"
         else:
@@ -741,8 +673,8 @@ class UI(App):
         self._sync_level_checkbox(level)
         self._records.append((datetime.now(), level, message))
 
-        if len(self._records) > _MAX_LINES:
-            del self._records[: len(self._records) - _MAX_LINES]
+        if len(self._records) > MAX_LINES:
+            del self._records[: len(self._records) - MAX_LINES]
 
         self._render_log()
 
@@ -750,7 +682,7 @@ class UI(App):
         # Create the level's filter checkbox on first sighting, and keep its
         # label's count up to date. Any level (CRITICAL/SUCCESS/TRACE/PRINT/…)
         # becomes toggleable; a level with no logs shows no checkbox.
-        label = f"{level} {_abbrev_count(self._level_counts.get(level, 0))}"
+        label = f"{level} {abbrev_count(self._level_counts.get(level, 0))}"
         checkbox = self._level_checkboxes.get(level)
 
         if checkbox is None:
@@ -785,7 +717,7 @@ class UI(App):
             )
 
         if self._show_level:
-            color = _LEVEL_COLOR.get(level, "white")
+            color = LEVEL_COLOR.get(level, "white")
             parts.append(Text(f"{level:<7} ", style=color))
 
         body = (
@@ -805,14 +737,14 @@ class UI(App):
                 pass
             else:
                 pretty = Text("\n" + json.dumps(obj, indent=2, ensure_ascii=False))
-                _JSON_HL.highlight(pretty)
+                JSON_HL.highlight(pretty)
                 return pretty
 
         # Keep ANSI from print() as-is; otherwise apply inline markdown.
         if "\x1b" in message:
             return Text.from_ansi(message)
 
-        return _inline_markdown(message)
+        return inline_markdown(message)
 
     def _render_log(self):
         lines = [
@@ -864,6 +796,19 @@ class UI(App):
     def _on_search(self, event: Input.Changed):
         self._search = event.value
         self._refilter()
+
+    def _sync_hotkeys(self):
+        # Reflect paused state in the bottom bar (skip once the run is done).
+        if self._finished:
+            return
+        self._hotkeys.update(
+            HOTKEYS_PAUSED if self._paused else HOTKEYS_RUNNING
+        )
+
+    def action_continue_lane(self):
+        # Release every lane parked at a breakpoint.
+        if self._paused:
+            events.resume_all()
 
     def action_focus_search(self):
         self.query_one("#search", Input).focus()

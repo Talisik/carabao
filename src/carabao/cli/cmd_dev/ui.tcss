@@ -1,0 +1,38 @@
+$accent: #3b82f6;
+Screen { background: transparent; }
+#body { height: 1fr; background: transparent; }
+#left { width: 25%; border-right: solid $accent; background: transparent; }
+#left Tabs { background: transparent; }
+#left ContentSwitcher, #left TabPane { background: transparent; padding: 0; }
+#tree { background: transparent; }
+#env { background: transparent; }
+#env-file { width: 1fr; height: auto; background: transparent; padding: 0 1; margin-bottom: 1; }
+#env-table { width: 1fr; height: auto; background: transparent; padding: 0 1; }
+#values { background: transparent; }
+#values-content { width: 1fr; height: auto; background: transparent; padding: 0 1; }
+#logs { width: 1fr; margin-left: 2; background: transparent; }
+#filters { height: auto; padding: 0 1; background: transparent; }
+#filters-spacer { width: 1fr; height: 1; background: transparent; }
+#filters Checkbox { width: auto; height: 1; border: none; padding: 0; margin-right: 2; background: transparent; }
+#filters Checkbox > .toggle--button { background: transparent; color: $panel; }
+#filters Checkbox.-on > .toggle--button { background: transparent; color: $text-success; }
+/* Thin border puts the text on the inner row → vertically centered. */
+#search { width: 1fr; background: transparent; border: round $accent; height: auto; margin-bottom: 1; }
+#log { height: 1fr; background: transparent; }
+#log-content { width: 1fr; height: auto; background: transparent; }
+Tree { background: transparent; }
+
+/* Live tree: guides always visible, no hover/cursor line highlight. */
+#tree > .tree--guides,
+#tree > .tree--guides-hover,
+#tree > .tree--guides-selected { color: $accent; text-style: none; }
+#tree > .tree--cursor,
+#tree > .tree--highlight,
+#tree > .tree--highlight-line { background: transparent; text-style: none; }
+
+/* Bottom bar: hotkeys (left) … mode + timer (right). */
+#bottombar { dock: bottom; height: 1; margin-top: 1; background: transparent; }
+#hotkeys { width: auto; color: $text-muted; }
+#bottombar-spacer { width: 1fr; }
+#mode { width: auto; margin-right: 2; }
+#status { width: auto; color: $text-muted; }
