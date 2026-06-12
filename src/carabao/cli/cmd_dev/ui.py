@@ -324,8 +324,10 @@ class UI(App):
     # ---- layout ----------------------------------------------------------
 
     def compose(self):
-        # Search spans the top; display/level filters live in the `f` modal.
+        # Search stays hidden until `/` is pressed or it has a query
+        # (see _update_search_visibility).
         self._search_input = Input(placeholder="Search…", id="search")
+        self._search_input.display = False
 
         yield self._search_input
 
@@ -1124,11 +1126,18 @@ class UI(App):
         self._search = event.value
 
         self._refilter()
+        self._update_search_visibility()
 
     @on(Input.Submitted, "#search")
     def _on_search_submit(self):
         # Enter in the search box defocuses (doesn't quit the app).
         self.set_focus(None)
+        self._update_search_visibility()
+
+    def _update_search_visibility(self):
+        # Visible only while focused or holding a query; hidden otherwise.
+        focused = self.focused is self._search_input
+        self._search_input.display = focused or bool(self._search)
 
     def _sync_hotkeys(self):
         # Kept for callers; the bottom bar tracks paused/filter state.
@@ -1189,7 +1198,9 @@ class UI(App):
             events.resume_all()
 
     def action_focus_search(self):
-        self.query_one("#search", Input).focus()
+        # Reveal then focus.
+        self._search_input.display = True
+        self._search_input.focus()
 
     def action_filter_bar(self, mode: str):
         # Toggle a filter strip in the bottom bar (press again to go back).
@@ -1251,6 +1262,7 @@ class UI(App):
         # Esc while typing in search just defocuses — doesn't quit.
         if self.focused is self._search_input:
             self.set_focus(None)
+            self._update_search_visibility()
 
             return
 
