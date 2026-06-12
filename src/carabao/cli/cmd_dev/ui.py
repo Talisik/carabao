@@ -264,9 +264,13 @@ class UI(App):
         Binding("c", "continue_lane", "Continue"),
         Binding("enter", "continue_lane", "Continue"),
     ] + [
-        # Number keys toggle the n-th item in the active filter strip.
+        # Number keys toggle the n-th level in the levels strip.
         Binding(str(digit), f"bar_item({digit})", show=False)
         for digit in range(1, 10)
+    ] + [
+        # Letter keys toggle display options — globally, not just in the strip.
+        Binding(hotkey, f"toggle_display('{option}')", show=False)
+        for _label, option, hotkey, _attr in _DISPLAY_TOGGLES
     ]
 
     def __init__(
@@ -1222,11 +1226,11 @@ class UI(App):
 
         out.append("esc/d back   ", style="bright_black")
 
-        for index, (label, _option, _hotkey, attr) in enumerate(_DISPLAY_TOGGLES, 1):
+        for _label, _option, hotkey, attr in _DISPLAY_TOGGLES:
             on = getattr(self, attr)
 
-            out.append(f"{index} ", style="bold")
-            out.append(f"{label}   ", style="#3b82f6" if on else "bright_black")
+            out.append(f"{hotkey} ", style="bold")
+            out.append(f"{_label}   ", style="#3b82f6" if on else "bright_black")
 
         return out
 
@@ -1247,22 +1251,27 @@ class UI(App):
         self._render_bottom_bar()
 
     def action_bar_item(self, n: int):
-        # Number key toggles the n-th item in the active filter strip.
-        if self._bar_mode == "levels":
-            levels = sorted(self._level_counts)
+        # Number key toggles the n-th level in the levels strip.
+        if self._bar_mode != "levels":
+            return
 
-            if 1 <= n <= len(levels) and n <= 9:
-                level = levels[n - 1]
+        levels = sorted(self._level_counts)
 
-                self._set_level(level, level not in self._enabled_levels)
-                self._render_bottom_bar()
+        if 1 <= n <= len(levels) and n <= 9:
+            level = levels[n - 1]
 
-        elif self._bar_mode == "display":
-            if 1 <= n <= len(_DISPLAY_TOGGLES):
-                _label, option, _hotkey, attr = _DISPLAY_TOGGLES[n - 1]
+            self._set_level(level, level not in self._enabled_levels)
+            self._render_bottom_bar()
 
-                self._set_display(option, not getattr(self, attr))
-                self._render_bottom_bar()
+    def action_toggle_display(self, option: str):
+        # Display options toggle globally via their letter key (and reflect in
+        # the display strip when it's open).
+        attr = next(a for _l, o, _h, a in _DISPLAY_TOGGLES if o == option)
+
+        self._set_display(option, not getattr(self, attr))
+
+        if self._bar_mode == "display":
+            self._render_bottom_bar()
 
     def action_prev_tab(self):
         self._cycle_tab(-1)
