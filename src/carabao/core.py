@@ -226,7 +226,7 @@ class Core:
                 hub = getattr(constants, hub_name, None)
 
                 if hub is not None:
-                    await hub.aclose_all()
+                    await hub.clear_all()
 
             except Exception:
                 pass
