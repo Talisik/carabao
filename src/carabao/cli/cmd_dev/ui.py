@@ -164,10 +164,12 @@ class _LogStatic(Static):
             return col, col
 
         start = col
+
         while start > 0 and _is_word_char(line[start - 1]):
             start -= 1
 
         end = col + 1
+
         while end < n and _is_word_char(line[end]):
             end += 1
 
@@ -324,6 +326,7 @@ class UI(App):
     def compose(self):
         # Search spans the top; display/level filters live in the `f` modal.
         self._search_input = Input(placeholder="Search…", id="search")
+
         yield self._search_input
 
         with Horizontal(id="body"):
@@ -470,9 +473,11 @@ class UI(App):
 
     def on_mount(self):
         self.title = self._run_title
+
         # Don't auto-focus the search box — keep keystrokes free for hotkeys
         # (f / c / /). `/` focuses search when the user actually wants it.
         self.set_focus(None)
+
         # Route logs to the pane only; silence the console stream so it can't
         # corrupt the TUI. Restored on unmount.
         self._null = open(os.devnull, "w")
@@ -1076,6 +1081,7 @@ class UI(App):
         content = Text("\n").join(lines) if lines else Text("")
         # Keep the plain text for word/line selection boundary lookups.
         self._log_static.plain_text = content.plain
+
         self._log_static.update(content)
 
         if self._autoscroll:
@@ -1152,32 +1158,28 @@ class UI(App):
 
     def _levels_bar_text(self) -> Text:
         out = Text()
-        out.append("levels  ", style="bold #3b82f6")
+
+        out.append("esc/f back   ", style="bright_black")
 
         for index, level in enumerate(sorted(self._level_counts), 1):
             on = level in self._enabled_levels
-            style = LEVEL_COLOR.get(level, "white") if on else "bright_black"
             key = str(index) if index <= 9 else "·"
 
-            out.append(f"{key}", style="bold" if on else "bold bright_black")
-            out.append(f"{'✓' if on else '·'}{level} ", style=style)
-
-        out.append("  esc/f back", style="bright_black")
+            out.append(f"{key} ", style="bold")
+            out.append(f"{level}   ", style="#3b82f6" if on else "bright_black")
 
         return out
 
     def _display_bar_text(self) -> Text:
         out = Text()
-        out.append("display  ", style="bold #3b82f6")
+
+        out.append("esc/d back   ", style="bright_black")
 
         for index, (label, _option, _hotkey, attr) in enumerate(_DISPLAY_TOGGLES, 1):
             on = getattr(self, attr)
-            style = "#3fb950" if on else "bright_black"
 
-            out.append(f"{index}", style="bold" if on else "bold bright_black")
-            out.append(f"{'✓' if on else '·'}{label} ", style=style)
-
-        out.append("  esc/d back", style="bright_black")
+            out.append(f"{index} ", style="bold")
+            out.append(f"{label}   ", style="#3b82f6" if on else "bright_black")
 
         return out
 
@@ -1202,12 +1204,14 @@ class UI(App):
 
             if 1 <= n <= len(levels) and n <= 9:
                 level = levels[n - 1]
+
                 self._set_level(level, level not in self._enabled_levels)
                 self._render_bottom_bar()
 
         elif self._bar_mode == "display":
             if 1 <= n <= len(_DISPLAY_TOGGLES):
                 _label, option, _hotkey, attr = _DISPLAY_TOGGLES[n - 1]
+
                 self._set_display(option, not getattr(self, attr))
                 self._render_bottom_bar()
 
@@ -1239,6 +1243,7 @@ class UI(App):
         # Esc leaves a filter strip back to the normal hotkey bar.
         if self._bar_mode != "normal":
             self._bar_mode = "normal"
+
             self._render_bottom_bar()
 
             return

@@ -17,6 +17,7 @@ def _module_for_path(path: str):
 
     for module in list(sys.modules.values()):
         file = getattr(module, "__file__", None)
+
         if file and os.path.abspath(file) == target:
             return module.__name__
 
@@ -29,6 +30,7 @@ def source_from_traceback(message: str):
     Lets an error log point at where the exception was *raised* rather than
     where it was logged. Returns None if the message has no traceback frames.
     """
+
     frames = _TB_FRAME_RE.findall(message)
 
     if not frames:
