@@ -73,6 +73,26 @@ def abbrev_count(n: int) -> str:
     return str(n)
 
 
+#: Marker that identifies a Python traceback body.
+TRACEBACK_MARKER = "Traceback (most recent call last):"
+
+
+def highlight_traceback(text: str) -> Text:
+    """Color a Python traceback body, keeping it selectable plain text.
+
+    Highlights the header, ``File "…", line N, in func`` frames, and the final
+    ``SomeError: message`` line.
+    """
+    out = Text(text)
+    out.highlight_regex(r"Traceback \(most recent call last\):", "bold red")
+    out.highlight_regex(r'File "[^"]+"', "cyan")
+    out.highlight_regex(r"line \d+", "yellow")
+    out.highlight_regex(r"(?m)\bin \S+$", "magenta")
+    # Final exception line: `pkg.SomeError: message` at column 0.
+    out.highlight_regex(r"(?m)^[\w.]*(?:Error|Exception|Warning|Interrupt)\b.*$", "bold red")
+    return out
+
+
 def inline_markdown(text: str) -> Text:
     """Render inline markdown (bold/italic/code/strike) as styled Text.
 

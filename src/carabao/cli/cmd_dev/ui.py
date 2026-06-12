@@ -46,11 +46,13 @@ from .constants import (
     SPINNER,
 )
 from .utils import (
+    TRACEBACK_MARKER,
     abbrev_count,
     fmt_bytes,
     fmt_elapsed,
     fmt_rate,
     format_value,
+    highlight_traceback,
     inline_markdown,
 )
 
@@ -200,7 +202,9 @@ class UI(App):
         self._pause_started: Optional[float] = None
         # Latest value handed downstream (meta, body), for the Value tab.
         self._latest_value: Optional[Tuple[str, str]] = None
-        self._records: List[Tuple[datetime, str, str]] = []
+        # (timestamp, level, message, source) — source is "module:func:line"
+        # or None when the origin is unknown (l2l logger, print()).
+        self._records: List[Tuple[datetime, str, str, Optional[str]]] = []
         # Level filter checkboxes are created on first sighting of each level
         # (so a level with no logs shows no checkbox), labeled with a count.
         self._enabled_levels: set = set()
@@ -214,6 +218,7 @@ class UI(App):
         self._show_rich = True
         self._autoscroll = True
         self._show_panel = True
+        self._show_source = False  # log call site (module:func:line)
         self._finished = False
 
     # ---- layout ----------------------------------------------------------
@@ -224,14 +229,15 @@ class UI(App):
         with Horizontal(id="filters"):
             # Spacer pushes the display toggles to the top-right.
             yield Static(id="filters-spacer")
-            for label, key in (
-                ("panel", "show:panel"),
-                ("time", "show:time"),
-                ("lvl", "show:level"),
-                ("rich", "show:rich"),
-                ("scroll", "show:scroll"),
+            for label, key, default in (
+                ("panel", "show:panel", True),
+                ("time", "show:time", True),
+                ("lvl", "show:level", True),
+                ("src", "show:src", False),
+                ("rich", "show:rich", True),
+                ("scroll", "show:scroll", True),
             ):
-                yield _Checkbox(label, value=True, name=key)
+                yield _Checkbox(label, value=default, name=key)
 
         yield Input(placeholder="Search…", id="search")
 
@@ -322,18 +328,16 @@ class UI(App):
         header.append(", ".join(files) if files else "—", style="bold #3b82f6")
         self._env_file.update(header)
 
-        keys = sorted(mentioned_keys)
-        table = Text()
-        if keys:
-            width = max(len(key) for key in keys)
-            table.append(f"{'KEY':<{width}}  ", style="bold #3b82f6")
-            table.append("VALUE\n", style="bold #3b82f6")
-            for key in keys:
-                value = mentioned_keys[key]
-                table.append(f"{key:<{width}}  ", style="cyan")
-                table.append("—" if value is None else str(value))
-                table.append("\n")
-        self._env_table.update(table)
+        # Two rows per entry: key on top (cyan), value below. No header.
+        out = Text()
+        for i, key in enumerate(sorted(mentioned_keys)):
+            value = mentioned_keys[key]
+            if i:
+                out.append("\n")
+            out.append(f"{key}\n", style="cyan")
+            out.append("—" if value is None else str(value))
+            out.append("\n")
+        self._env_table.update(out)
 
     def _record_value(self, name, value):
         # Only the latest value flowing through the pipeline (Value tab).
@@ -465,7 +469,16 @@ class UI(App):
 
             def sink(message):
                 record = message.record
-                self._on_log(record["level"].name, record["message"])
+                text = record["message"]
+                exc = record["exception"]
+                if exc is not None:
+                    import traceback as _tb
+
+                    text = f"{text}\n" + "".join(
+                        _tb.format_exception(exc.type, exc.value, exc.traceback)
+                    ).rstrip()
+                source = f"{record['name']}:{record['function']}:{record['line']}"
+                self._on_log(record["level"].name, text, source)
 
             loguru_logger.remove()  # drop the default stderr handler
             self._loguru_removed = True
@@ -499,7 +512,13 @@ class UI(App):
         def tap(logger_self, record):
             original(logger_self, record)
             try:
-                forward(record.levelname, record.getMessage())
+                message = record.getMessage()
+                if record.exc_info:
+                    message = f"{message}\n{logging.Formatter().formatException(record.exc_info).rstrip()}"
+                elif record.exc_text:
+                    message = f"{message}\n{record.exc_text.rstrip()}"
+                source = f"{record.name}:{record.funcName}:{record.lineno}"
+                forward(record.levelname, message, source)
             except Exception:
                 pass
 
@@ -574,12 +593,28 @@ class UI(App):
     def _on_event(self, kind: str, payload: dict):
         self.call_from_thread(self._apply_event, kind, payload)
 
-    def _on_log(self, level: str, message: str):
+    def _on_log(self, level: str, message: str, source: Optional[str] = None):
         # Worker thread → marshal to the UI; ignore if the app is gone.
+        # loguru/stdlib pass an explicit source; for l2l logger and print() we
+        # recover the call site by walking the stack here (still on the worker
+        # thread, so the frames are the real caller).
+        if source is None:
+            source = self._origin_from_stack()
         try:
-            self.call_from_thread(self._add_log, level, message)
+            self.call_from_thread(self._add_log, level, message, source)
         except Exception:
             pass
+
+    def _origin_from_stack(self) -> Optional[str]:
+        """First caller frame outside the logging plumbing → 'module:func:line'."""
+        skip = {__name__, "l2l.logger"}
+        frame = sys._getframe()
+        while frame is not None:
+            module = frame.f_globals.get("__name__") or ""
+            if module not in skip and not module.startswith("textual"):
+                return f"{module}:{frame.f_code.co_name}:{frame.f_lineno}"
+            frame = frame.f_back
+        return None
 
     # ---- UI-thread handlers ---------------------------------------------
 
@@ -748,10 +783,10 @@ class UI(App):
             if entry is not None:
                 self._render_node(entry)
 
-    def _add_log(self, level: str, message: str):
+    def _add_log(self, level: str, message: str, source: Optional[str] = None):
         self._level_counts[level] = self._level_counts.get(level, 0) + 1
         self._sync_level_checkbox(level)
-        self._records.append((datetime.now(), level, message))
+        self._records.append((datetime.now(), level, message, source))
 
         if len(self._records) > MAX_LINES:
             del self._records[: len(self._records) - MAX_LINES]
@@ -791,7 +826,9 @@ class UI(App):
 
         return True
 
-    def _render_record(self, ts: datetime, level: str, message: str) -> Text:
+    def _render_record(
+        self, ts: datetime, level: str, message: str, source: Optional[str]
+    ) -> Text:
         parts: List[Text] = []
 
         if self._show_time:
@@ -803,6 +840,9 @@ class UI(App):
             color = LEVEL_COLOR.get(level, "white")
             parts.append(Text(f"{level:<7} ", style=color))
 
+        if self._show_source:
+            parts.append(Text(f"{source or '—'}  ", style="bright_black"))
+
         body = (
             self._render_body(message) if self._show_rich else Text.from_ansi(message)
         )
@@ -810,6 +850,10 @@ class UI(App):
         return Text.assemble(*parts)
 
     def _render_body(self, message: str) -> Text:
+        # Color Python tracebacks.
+        if TRACEBACK_MARKER in message:
+            return highlight_traceback(message)
+
         # Pretty-print + syntax-highlight JSON payloads; otherwise keep ANSI.
         stripped = message.strip()
 
@@ -831,8 +875,8 @@ class UI(App):
 
     def _render_log(self):
         lines = [
-            self._render_record(ts, level, message)
-            for ts, level, message in self._records
+            self._render_record(ts, level, message, source)
+            for ts, level, message, source in self._records
             if self._passes_filter(level, message)
         ]
         self._log_static.update(Text("\n").join(lines) if lines else Text(""))
@@ -865,6 +909,8 @@ class UI(App):
             elif option == "panel":
                 self._show_panel = event.value
                 self._left.display = event.value
+            elif option == "src":
+                self._show_source = event.value
             self._render_log()
             return
 
