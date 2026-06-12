@@ -60,21 +60,8 @@ Without the extra, the core runtime (`moo run`, `moo dev <lane>`) works fully;
 only the interactive screens require it (you'll get a clear message prompting
 the install if you open them without it).
 
-### Database extras
-
-The database hubs need their drivers, also shipped as optional extras (they pull
-the matching `fun-things` extra; install only what you use):
-
-```sh
-pip install "carabao[mongo]"           # MongoDB (sync + async hubs)
-pip install "carabao[redis]"           # Redis (sync + async hubs)
-pip install "carabao[elasticsearch]"   # Elasticsearch
-pip install "carabao[postgres]"        # PostgreSQL (psycopg2)
-pip install "carabao[databases]"       # all of the above
-pip install "carabao[all]"             # standard UI + all databases
-```
-
-Combine freely, e.g. `pip install "carabao[standard,mongo,redis]"`.
+The database hubs (MongoDB, Redis, Elasticsearch, PostgreSQL) need their drivers
+installed separately — e.g. `pip install "fun-things[mongo,redis]" psycopg2-binary`.
 
 ## Requirements
 
