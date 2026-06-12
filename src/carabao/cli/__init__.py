@@ -118,6 +118,12 @@ def dev(
         value=str(result.ui),
     )
 
+    SECRET_CFG.write(
+        section=SECRET_CFG.LOG_FILE,
+        key=SECRET_CFG.LOG_FILE,
+        value=str(result.log_file),
+    )
+
     for key, value in result.raw_form.items():
         SECRET_CFG.write(
             section=f"{result.name}{SECRET_CFG.FORM}",
@@ -149,6 +155,7 @@ def dev(
             title=result.name,
             lanes=[result.lane],
             test_mode=result.test_mode,
+            log_file=result.log_file,
         ).run()
     else:
         Core.start(

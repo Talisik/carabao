@@ -101,6 +101,18 @@ def _is_word_char(char: str) -> bool:
     return char.isalnum() or char == "_"
 
 
+def _next_log_path() -> str:
+    """First free ``moo.log`` / ``moo2.log`` / … in the cwd."""
+    candidate = "moo.log"
+    index = 2
+
+    while os.path.exists(candidate):
+        candidate = f"moo{index}.log"
+        index += 1
+
+    return candidate
+
+
 class _LogStatic(Static):
     """Log pane that selects a word on double-click, a line on triple-click.
 
@@ -187,6 +199,7 @@ class _ConfirmQuit(ModalScreen[bool]):
         border: round $accent; background: $surface;
     }
     #confirm-box Label { width: 100%; text-align: center; margin-bottom: 1; }
+    #confirm-hint { color: $text-muted; margin-top: 1; margin-bottom: 0; }
     #confirm-buttons { height: auto; align: center middle; }
     #confirm-buttons Button { margin: 0 1; border: none; height: 3; content-align: center middle; color: white; text-style: bold; }
     #confirm-yes { background: #f85149; }
@@ -206,8 +219,10 @@ class _ConfirmQuit(ModalScreen[bool]):
             yield Label("Pipeline is still running.\nQuit anyway?")
 
             with Horizontal(id="confirm-buttons"):
-                yield Button("Quit", variant="error", id="confirm-yes")
-                yield Button("Cancel", variant="primary", id="confirm-no")
+                yield Button("Quit (y)", variant="error", id="confirm-yes")
+                yield Button("Cancel (n)", variant="primary", id="confirm-no")
+
+            yield Label("y quit   ·   n / esc cancel", id="confirm-hint")
 
     @on(Button.Pressed, "#confirm-yes")
     def _yes(self):
@@ -274,6 +289,7 @@ class UI(App):
         title: str = "Lane UI",
         lanes: Optional[list] = None,
         test_mode: bool = False,
+        log_file: bool = False,
     ):
         # ansi_color=True renders with the terminal's own ANSI palette + default
         # (transparent) background instead of a painted theme color. Must be
@@ -320,6 +336,10 @@ class UI(App):
         self._finished = False
         # Bottom-bar mode: "normal" hotkeys, or "levels"/"display" filter strips.
         self._bar_mode = "normal"
+        # Optional log-to-file streaming (moo.log, moo2.log, …).
+        self._log_file_enabled = log_file
+        self._log_fp = None
+        self._log_lock = threading.Lock()
 
     # ---- layout ----------------------------------------------------------
 
@@ -486,6 +506,15 @@ class UI(App):
         self._prev_stream = logger._stream
 
         logger.set_stream(self._null)
+        # Open the log file (moo.log, or moo2.log… if taken) before any
+        # logs flow, so nothing is missed.
+        if self._log_file_enabled:
+            try:
+                path = _next_log_path()
+                self._log_fp = open(path, "w", encoding="utf-8")
+            except Exception:
+                self._log_fp = None
+
         events.subscribe(self._on_event)
         # Dev-only: arm breakpoints so lane.breakpoint() calls pause here.
         events.enable_breakpoints()
@@ -588,6 +617,12 @@ class UI(App):
 
         if hasattr(self, "_null"):
             self._null.close()
+
+        if self._log_fp is not None:
+            try:
+                self._log_fp.close()
+            except Exception:
+                pass
 
     def _bridge_loguru(self):
         """Route loguru output (carabao/user lanes) into the log pane only.
@@ -775,8 +810,24 @@ class UI(App):
         if TRACEBACK_MARKER in message:
             source = source_from_traceback(message) or source
 
+        if self._log_fp is not None:
+            self._write_log_file(level, message, source)
+
         try:
             self.call_from_thread(self._add_log, level, message, source)
+        except Exception:
+            pass
+
+    def _write_log_file(self, level: str, message: str, source: Optional[str]):
+        # Stream a plain-text (ANSI-stripped) line to the log file.
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        clean = Text.from_ansi(message).plain
+        line = f"{ts} {level:<7} {source or '-'}  {clean}\n"
+
+        try:
+            with self._log_lock:
+                self._log_fp.write(line)
+                self._log_fp.flush()
         except Exception:
             pass
 

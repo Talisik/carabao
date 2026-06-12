@@ -275,7 +275,7 @@ Requires the `standard` extra (`pip install "carabao[standard]"`).
 -   Shows the selected lane's docstring and a **process tree** built from its
     `lanes` field (recursive — sub-lanes appear automatically).
 -   Edits the lane's form fields (if it defines a `Form`).
--   Toggles: **🧪 Test Mode** and **📊 UI** (the live visualizer; on by default).
+-   Toggles: **🧪 Test** and **📊 UI** (the live visualizer; on by default).
 -   Remembers your last selection. `Enter` runs, `Esc` exits.
 
 ![The dev queue selector](https://raw.githubusercontent.com/Talisik/carabao/main/previews/queue_selection.jpg)
@@ -284,7 +284,7 @@ Requires the `standard` extra (`pip install "carabao[standard]"`).
 
 **Live UI.** With the **📊 UI** toggle on, running a lane opens a live dashboard.
 
-The **left panel** (toggle with **panel**) has tabs:
+The **left panel** has tabs (cycle with **`q`** / **`e`**):
 
 -   **Lanes** — the full pipeline laid out from the `lanes` field up front; each
     lane spins while active and shows its true work time when done.
@@ -295,14 +295,22 @@ The **left panel** (toggle with **panel**) has tabs:
 The **log pane** captures `print()`, the `l2l` logger, **loguru**, and the
 stdlib `logging` module (including non-propagating loggers):
 
--   selectable text (drag to select, `Ctrl+C` to copy)
--   syntax-highlighted JSON and inline markdown (`**bold**`, `` `code` ``,
-    `*italic*`, `~~strike~~`)
--   per-level filter checkboxes that appear only for levels seen, each with a
-    live count (`INFO 5K`); `TRACE` is off by default
--   `/` to search; top-right toggles for **time**, **lvl**, **rich**, **scroll**
+-   selectable text (drag to select, double-click a word, triple-click a line,
+    `Ctrl+C` to copy)
+-   syntax-highlighted JSON, colored tracebacks, and inline markdown
+    (`**bold**`, `` `code` ``, `*italic*`, `~~strike~~`)
+-   optional `module:func:line` origin per line
 
 ![The log pane](https://raw.githubusercontent.com/Talisik/carabao/main/previews/logs.jpg)
+
+The **bottom bar** is a compact control strip:
+
+-   **`/`** reveals a search box (hides again when empty)
+-   **`f`** swaps in the level filters, **`d`** the display toggles — **number
+    keys** toggle each item; `TRACE` is off by default
+-   live RAM / CPU / network (when `psutil` is installed) and an elapsed timer
+
+![Search box and the Environment tab](https://raw.githubusercontent.com/Talisik/carabao/main/previews/search_and_env.jpg)
 
 **Breakpoints.** Call `self.breakpoint("label")` inside `process()` to pause the
 pipeline (dev-only — a no-op under `moo run`). The lane shows `⏸`, logs at the

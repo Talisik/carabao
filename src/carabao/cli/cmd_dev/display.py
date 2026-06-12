@@ -39,6 +39,7 @@ class Result:
     form: dict[str, Any]
     raw_form: dict[str, str]
     ui: bool = False
+    log_file: bool = False
 
 
 class Display(App[Result]):
@@ -139,7 +140,7 @@ class Display(App[Result]):
             )
 
             yield self.test_mode
-            yield Label("🧪 Test Mode")
+            yield Label("🧪 Test")
 
         with Horizontal(
             classes="switch",
@@ -150,6 +151,16 @@ class Display(App[Result]):
 
             yield self.ui
             yield Label("📊 UI")
+
+        with Horizontal(
+            classes="switch",
+        ):
+            self.log_file = Switch(
+                SECRET_CFG.log_file,
+            )
+
+            yield self.log_file
+            yield Label("📄 Log")
 
         yield Button.error(
             "\\[Esc] Exit",
@@ -498,6 +509,7 @@ class MyLane(Lane):
                 form={name: field[1](field[0]) for name, field in _form.items()},
                 raw_form={name: field[0] for name, field in _form.items()},
                 ui=self.ui.value,
+                log_file=self.log_file.value,
             ),
         )
 
