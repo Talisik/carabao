@@ -245,6 +245,19 @@ class _NodeState:
         self.work: Optional[float] = None
 
 
+class _LogRecord:
+    """One captured log line; ``text`` caches its rendered Text (rendered once)."""
+
+    __slots__ = ("ts", "level", "message", "source", "text")
+
+    def __init__(self, ts: datetime, level: str, message: str, source):
+        self.ts = ts
+        self.level = level
+        self.message = message
+        self.source = source
+        self.text: Optional[Text] = None
+
+
 class UI(App):
     """Runs ``runner`` in a worker thread and visualizes lane activity."""
 
@@ -309,7 +322,9 @@ class UI(App):
         self._latest_value: Optional[Tuple[str, str]] = None
         # (timestamp, level, message, source) — source is "module:func:line"
         # or None when the origin is unknown (l2l logger, print()).
-        self._records: List[Tuple[datetime, str, str, Optional[str]]] = []
+        self._records: List[_LogRecord] = []
+        # Coalesce log re-renders to a timer (streaming bursts → ~10 fps).
+        self._log_dirty = False
         # Levels seen (with counts) and which are enabled. The filter checkboxes
         # are built fresh each time the filters modal opens.
         self._enabled_levels: set = set()
@@ -516,6 +531,7 @@ class UI(App):
         self._refresh_env()
         self.set_interval(1.0, self._refresh_env)
         self.set_interval(0.1, self._tick_spinner)
+        self.set_interval(0.1, self._flush_log)
 
         self._start_monotonic = monotonic()
 
@@ -1052,12 +1068,26 @@ class UI(App):
         if first_sighting and level not in LEVELS_OFF_BY_DEFAULT:
             self._enabled_levels.add(level)
 
-        self._records.append((datetime.now(), level, message, source))
+        self._records.append(_LogRecord(datetime.now(), level, message, source))
 
         if len(self._records) > MAX_LINES:
             del self._records[: len(self._records) - MAX_LINES]
 
+        # Mark dirty; the actual render is coalesced in _flush_log.
+        self._log_dirty = True
+
+    def _flush_log(self):
+        # Render at most ~10x/s regardless of how fast logs stream in.
+        if not self._log_dirty:
+            return
+
+        self._log_dirty = False
         self._render_log()
+
+    def _invalidate_renders(self):
+        # Drop cached per-line renders (e.g. a display toggle changed).
+        for record in self._records:
+            record.text = None
 
     def _passes_filter(self, level: str, message: str) -> bool:
         if level not in self._enabled_levels:
@@ -1068,31 +1098,37 @@ class UI(App):
 
         return True
 
-    def _render_record(
-        self, ts: datetime, level: str, message: str, source: Optional[str]
-    ) -> Text:
+    def _render_record(self, record: "_LogRecord") -> Text:
+        # Cache: render each line once; reuse until invalidated.
+        if record.text is not None:
+            return record.text
+
         parts: List[Text] = []
 
         if self._show_time:
             parts.append(
-                Text(ts.strftime("%Y-%m-%d %H:%M:%S") + " ", style="bright_black")
+                Text(record.ts.strftime("%Y-%m-%d %H:%M:%S") + " ", style="bright_black")
             )
 
         if self._show_level:
-            color = LEVEL_COLOR.get(level, "white")
+            color = LEVEL_COLOR.get(record.level, "white")
 
-            parts.append(Text(f"{level:<7} ", style=color))
+            parts.append(Text(f"{record.level:<7} ", style=color))
 
         if self._show_source:
-            parts.append(Text(f"{source or '—'}  ", style="bright_black"))
+            parts.append(Text(f"{record.source or '—'}  ", style="bright_black"))
 
         body = (
-            self._render_body(message) if self._show_rich else Text.from_ansi(message)
+            self._render_body(record.message)
+            if self._show_rich
+            else Text.from_ansi(record.message)
         )
 
         parts.append(body)
 
-        return Text.assemble(*parts)
+        record.text = Text.assemble(*parts)
+
+        return record.text
 
     def _render_body(self, message: str) -> Text:
         # Color Python tracebacks.
@@ -1122,9 +1158,9 @@ class UI(App):
 
     def _render_log(self):
         lines = [
-            self._render_record(ts, level, message, source)
-            for ts, level, message, source in self._records
-            if self._passes_filter(level, message)
+            self._render_record(record)
+            for record in self._records
+            if self._passes_filter(record.level, record.message)
         ]
 
         content = Text("\n").join(lines) if lines else Text("")
@@ -1156,6 +1192,10 @@ class UI(App):
             self._left.display = value
         elif option == "src":
             self._show_source = value
+
+        # These change how each line renders → drop the per-line cache.
+        if option in ("time", "level", "src", "rich"):
+            self._invalidate_renders()
 
         self._render_log()
 
