@@ -23,6 +23,7 @@ class BaseCFG(ABC):
         Returns:
             ConfigParser: The configuration parser instance.
         """
+
         if self.__parser is None:
             self.__parser = self.__get_config()
 
@@ -35,6 +36,7 @@ class BaseCFG(ABC):
         Returns:
             ConfigParser: The initialized configuration parser.
         """
+
         config = ConfigParser(
             allow_no_value=True,
             comment_prefixes=[],
@@ -58,6 +60,7 @@ class BaseCFG(ABC):
         Returns:
             SectionProxy: The section proxy object.
         """
+
         if text not in self.parser:
             self.parser.add_section(text)
 
@@ -72,11 +75,13 @@ class BaseCFG(ABC):
         """
         Writes a value to a section.
         """
+
         self.get_section(section)[key] = value
 
     def save(self):
         """
         Saves the `.cfg` file.
         """
+
         with open(self.filepath, "w") as f:
             self.parser.write(f)

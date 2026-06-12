@@ -21,6 +21,7 @@ class StdOutCatcher(StringIO):
         Returns:
             int: The number of characters written.
         """
+
         result = super().write(s)
 
         self.__stdout.write(s)
@@ -37,6 +38,7 @@ class StdOutCatcher(StringIO):
         Returns:
             None
         """
+
         result = super().writelines(lines)
 
         self.__stdout.writelines(lines)
@@ -49,6 +51,7 @@ class StdOutCatcher(StringIO):
 
         Stores the original stdout for later restoration.
         """
+
         self.__stdout = sys.stdout
         sys.stdout = self
 
@@ -56,8 +59,10 @@ class StdOutCatcher(StringIO):
         """
         Stop capturing stdout and restore the original stdout.
         """
+
         if "__stdout" not in self.__dict__:
             return
 
         sys.stdout = self.__stdout
+
         del self.__stdout

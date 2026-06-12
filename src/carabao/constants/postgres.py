@@ -84,6 +84,7 @@ class PGMeta(EnvironmentHubMeta[connection]):
 
             try:
                 cur = probe.cursor()
+
                 cur.execute("SELECT 1")
                 cur.close()
 

@@ -202,6 +202,7 @@ class Display(App[Result]):
             and self.lane_list.index < len(self.queue_names)
         ):
             lane_name = self.queue_names[self.lane_list.index]
+
             self.__update_info(lane_name)
 
             asyncio.run(self.__update_form(lane_name))
@@ -210,6 +211,7 @@ class Display(App[Result]):
         """
         Update the docstring widget with the selected lane's docstring.
         """
+
         lane = self.lanes[lane_name][0]
 
         self.docstring_widget.update(
@@ -247,6 +249,7 @@ class Display(App[Result]):
         """
         Update the form with the selected lane's fields.
         """
+
         form_container = self.query_one("#form-container")
 
         await form_container.remove_children()
@@ -277,6 +280,7 @@ class MyLane(Lane):
                     """,
                 )
             )
+
             return
 
         if lane_name not in self.forms:
@@ -420,14 +424,17 @@ class MyLane(Lane):
                         priority_number,
                     ),
                 )
+
                 continue
 
     def action_exit_app(self):
         """Exit the application."""
+
         self.exit(None)
 
     def action_run_lane(self):
         """Run the selected lane."""
+
         self.on_run()
 
     @on(Switch.Changed)
@@ -507,6 +514,7 @@ class MyLane(Lane):
         lane_name = self.queue_names[list_view.index]
 
         self.__update_info(lane_name)
+
         await self.__update_form(lane_name)
 
     @on(ListView.Selected)

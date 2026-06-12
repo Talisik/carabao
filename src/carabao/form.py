@@ -48,6 +48,7 @@ def _make_field(
     Returns:
         A new _Field instance.
     """
+
     raw_cast = cast
 
     if cast is bool:
@@ -83,6 +84,7 @@ def Field(
     Returns:
         A field instance that can be used in a Form class.
     """
+
     return _make_field(
         name=name,
         default=default,
@@ -103,6 +105,7 @@ def _get_fields(lane: Type[Lane]):
     Yields:
         Field instances from the lane's Form classes.
     """
+
     names: Set[str] = set()
 
     for form in _get_forms_from_lane(lane):
@@ -174,6 +177,7 @@ def _get_forms_from_lane(lane: Type[Lane]):
     Yields:
         Form classes found in the lane's class hierarchy.
     """
+
     for base_class in lane.__mro__:
         for inner_class in base_class.__dict__.values():
             if not isinstance(inner_class, type):
@@ -181,6 +185,7 @@ def _get_forms_from_lane(lane: Type[Lane]):
 
             if inner_class.__name__.lower() == "form":
                 yield inner_class
+
                 continue
 
 
@@ -194,6 +199,7 @@ def _get_annotations(type: Type):
     Returns:
         A tuple of (annotations, defaults) dictionaries.
     """
+
     annotations = {}
     defaults = {}
 
@@ -231,6 +237,7 @@ def _get_form(lane: Type[Lane]):
     Returns:
         The first Form class found or None if no Form class exists.
     """
+
     return next(_get_forms_from_lane(lane), None)
 
 

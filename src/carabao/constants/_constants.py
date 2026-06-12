@@ -92,6 +92,7 @@ class Constants:
         Loaded files are recorded in ``loaded_env_files`` for the dev UI's
         Environment tab.
         """
+
         if cls.__env:
             return
 
@@ -119,6 +120,7 @@ class Constants:
         Loads all property functions to ensure that all environment variables
         are initialized and loaded.
         """
+
         for name in dir(self):
             attr = getattr(self, name)
 
@@ -177,6 +179,7 @@ class Constants:
         Returns:
             int or None: Number of processes to use, or None for default.
         """
+
         key = "PROCESSES"
 
         if key in self.__custom:
@@ -202,6 +205,7 @@ class Constants:
         things that might be bad in a proper deployment will be adjusted,
         such as testing-related stuff.
         """
+
         key = "DEPLOY_SAFELY"
 
         if key in self.__custom:
@@ -228,6 +232,7 @@ class Constants:
         Returns:
             str: The pod name, or empty string if not in Kubernetes.
         """
+
         key = "POD_NAME"
 
         if key in self.__custom:
@@ -254,6 +259,7 @@ class Constants:
         Returns:
             int: The pod index, or 0 if not determinable.
         """
+
         key = "POD_INDEX"
 
         if key in self.__custom:
@@ -276,6 +282,7 @@ class Constants:
         """
         If this process is running inside Kubernetes.
         """
+
         key = "IN_KUBERNETES"
 
         if key in self.__custom:
@@ -304,6 +311,7 @@ class Constants:
         Returns:
             str: The environment name (e.g., 'production', 'staging', 'development').
         """
+
         key = "ENVIRONMENT"
 
         if key in self.__custom:
@@ -330,6 +338,7 @@ class Constants:
         Returns:
             bool: True if in development mode, False otherwise.
         """
+
         from ..core import Core
 
         return Core.is_dev()
@@ -342,6 +351,7 @@ class Constants:
         Returns:
             bool: True if ENVIRONMENT equals 'production', False otherwise.
         """
+
         self.load_env()
 
         return self.ENVIRONMENT == "production"
@@ -354,6 +364,7 @@ class Constants:
         Returns:
             bool: True if ENVIRONMENT equals 'staging', False otherwise.
         """
+
         self.load_env()
 
         return self.ENVIRONMENT == "staging"
@@ -365,6 +376,7 @@ class Constants:
 
         Always `False` inside Kubernetes.
         """
+
         key = "TESTING"
 
         if key in self.__custom:
@@ -399,6 +411,7 @@ class Constants:
         Returns:
             bool: True if application should exit after one run, False for continuous execution.
         """
+
         key = "SINGLE_RUN"
 
         if key in self.__custom:
@@ -425,6 +438,7 @@ class Constants:
         Returns:
             str or None: The queue name or None if not specified.
         """
+
         key = "QUEUE_NAME"
 
         if key in self.__custom:
@@ -457,6 +471,7 @@ class Constants:
         Returns:
             int: Batch size, defaults to 1 if not specified.
         """
+
         key = "BATCH_SIZE"
 
         if key in self.__custom:
@@ -483,6 +498,7 @@ class Constants:
         Returns:
             float: Minimum sleep time in seconds, defaults to 3.
         """
+
         key = "SLEEP_MIN"
 
         if key in self.__custom:
@@ -509,6 +525,7 @@ class Constants:
         Returns:
             float: Maximum sleep time in seconds, defaults to 5.
         """
+
         key = "SLEEP_MAX"
 
         if key in self.__custom:
@@ -535,6 +552,7 @@ class Constants:
         Returns:
             bool: True if the application should exit when finished, False otherwise.
         """
+
         key = "EXIT_ON_FINISH"
 
         if key in self.__custom:
@@ -561,6 +579,7 @@ class Constants:
         Returns:
             float: Exit delay in seconds, defaults to 3.
         """
+
         key = "EXIT_DELAY"
 
         if key in self.__custom:
@@ -584,6 +603,7 @@ class Constants:
         """
         A list of directories where lane modules are located.
         """
+
         key = "LANE_DIRECTORIES"
 
         if key in self.__custom:

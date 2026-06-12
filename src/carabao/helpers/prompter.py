@@ -36,6 +36,7 @@ class Prompter:
             Args:
                 initial_value: The initial value for this component
             """
+
             self.__initialized = False
             self.__initial_value = initial_value
 
@@ -47,6 +48,7 @@ class Prompter:
             Returns:
                 The initial value if not yet initialized, otherwise the queried value
             """
+
             if not self.__initialized:
                 return self.__initial_value  # type: ignore
 
@@ -60,6 +62,7 @@ class Prompter:
             Returns:
                 The parent Prompter instance
             """
+
             return self.__this
 
         def _query(self) -> T:  # type: ignore
@@ -69,6 +72,7 @@ class Prompter:
             Returns:
                 The queried value
             """
+
             pass
 
         def _do(self) -> Any:
@@ -78,6 +82,7 @@ class Prompter:
             Returns:
                 Any result from the action
             """
+
             pass
 
         @final
@@ -88,6 +93,7 @@ class Prompter:
             Args:
                 prompter: The Prompter instance to register with
             """
+
             self.__this = prompter
 
         @final
@@ -98,6 +104,7 @@ class Prompter:
             Returns:
                 The queried value
             """
+
             self.__initialized = True
             self.__value = self._query()
 
@@ -108,6 +115,7 @@ class Prompter:
             """
             Execute the component's _do method.
             """
+
             self._do()
 
         @final
@@ -115,6 +123,7 @@ class Prompter:
             """
             Reset the component's initialization state.
             """
+
             self.__initialized = False
 
         def __getitem__(
@@ -130,12 +139,14 @@ class Prompter:
             Returns:
                 The value associated with the given name
             """
+
             return self.this[name]
 
     def __init__(self):
         """
         Initialize a new Prompter instance.
         """
+
         self.__components: Dict[str, Prompter.Component] = {}
         self.__values: dict = {}
 
@@ -143,6 +154,7 @@ class Prompter:
         """
         Query all components in priority order (highest to lowest).
         """
+
         for component in sorted(
             self.__components.values(),
             key=lambda component: component.priority_number,
@@ -154,6 +166,7 @@ class Prompter:
         """
         Execute all components in priority order (highest to lowest).
         """
+
         for component in sorted(
             self.__components.values(),
             key=lambda component: component.priority_number,
@@ -169,7 +182,9 @@ class Prompter:
             name: The name to associate with the component
             component: The component to add
         """
+
         self.__components[name] = component
+
         component._register(self)
 
     def set(self, name: str, value: Any):
@@ -180,6 +195,7 @@ class Prompter:
             name: The name to associate with the value
             value: The value to store
         """
+
         self.__values[name] = value
 
     def __getitem__(
@@ -195,6 +211,7 @@ class Prompter:
         Returns:
             The value associated with the given name
         """
+
         if name in self.__components:
             return self.__components[name].value
 

@@ -80,6 +80,7 @@ class _LogWriter:
 
         while "\n" in self._buffer:
             line, self._buffer = self._buffer.split("\n", 1)
+
             if line:
                 self._forward(self._level, line)
 
@@ -130,6 +131,7 @@ class _ConfirmQuit(ModalScreen[bool]):
     def compose(self):
         with Vertical(id="confirm-box"):
             yield Label("Pipeline is still running.\nQuit anyway?")
+
             with Horizontal(id="confirm-buttons"):
                 yield Button("Quit", variant="error", id="confirm-yes")
                 yield Button("Cancel", variant="primary", id="confirm-no")
@@ -182,6 +184,7 @@ class UI(App):
         # passed to the constructor (it drives the render filters there); a class
         # attribute alone has no effect. No theme registration needed.
         super().__init__(ansi_color=True)
+
         self._runner = runner
         self._run_title = title
         self._test_mode = test_mode
@@ -229,6 +232,7 @@ class UI(App):
         with Horizontal(id="filters"):
             # Spacer pushes the display toggles to the top-right.
             yield Static(id="filters-spacer")
+
             for label, key, default in (
                 ("panel", "show:panel", True),
                 ("time", "show:time", True),
@@ -244,27 +248,34 @@ class UI(App):
         with Horizontal(id="body"):
             # Left pane: Lanes tree + Environment, in tabs.
             self._left = TabbedContent(id="left")
+
             with self._left:
                 with TabPane("Lanes", id="tab-lanes"):
                     tree: Tree = Tree("Lanes", id="tree")
+
                     tree.root.expand()
+
                     tree.root.allow_expand = False
                     # Hide the root — it's redundant with the tab name; primary
                     # lanes render at the top level instead.
                     tree.show_root = False
                     self._tree = tree
+
                     yield tree
 
                 with TabPane("Env", id="tab-env"):
                     with VerticalScroll(id="env"):
                         self._env_file = Static(id="env-file")
+
                         yield self._env_file
+
                         # A Static of aligned Text (not a DataTable) so the
                         # values are selectable/copyable, like the log pane.
                         self._env_table = Static(
                             id="env-table",
                             markup=False,
                         )
+
                         yield self._env_table
 
                 with TabPane("Value", id="tab-value"):
@@ -273,6 +284,7 @@ class UI(App):
                             id="value-content",
                             markup=False,
                         )
+
                         yield self._value_static
 
             with Vertical(id="logs"):
@@ -288,6 +300,7 @@ class UI(App):
                         id="log-content",
                         markup=False,
                     )
+
                     yield self._log_static
 
         # Bottom bar: hotkeys (left) … resource stats + mode + timer (right).
@@ -296,16 +309,21 @@ class UI(App):
                 HOTKEYS_RUNNING,
                 id="hotkeys",
             )
+
             yield self._hotkeys
             yield Static(id="bottombar-spacer")
+
             # System stats (RAM/CPU/network), shown only when psutil is present.
             self._stats = Static(id="stats")
+
             yield self._stats
             yield Static(self._mode_text(), id="mode")
+
             self._status_bar = Static(
                 "Running…",
                 id="status",
             )
+
             yield self._status_bar
 
     def _mode_text(self) -> str:
@@ -325,36 +343,47 @@ class UI(App):
             return
 
         header = Text()
+
         header.append(", ".join(files) if files else "—", style="bold #3b82f6")
         self._env_file.update(header)
 
         # Two rows per entry: key on top (cyan), value below. No header.
         out = Text()
+
         for i, key in enumerate(sorted(mentioned_keys)):
             value = mentioned_keys[key]
+
             if i:
                 out.append("\n")
+
             out.append(f"{key}\n", style="cyan")
             out.append("—" if value is None else str(value))
             out.append("\n")
+
         self._env_table.update(out)
 
     def _record_value(self, name, value):
         # Only the latest value flowing through the pipeline (Value tab).
         self._latest_value = format_value(value)
+
         self._render_value()
 
     def _render_value(self):
         if self._latest_value is None:
             self._value_static.update(Text(""))
+
             return
 
         meta, body = self._latest_value
         out = Text()
+
         out.append(f"{meta}\n\n", style="bright_black")
+
         body_text = Text(body)
+
         if body[:1] in "{[":  # highlight JSON payloads
             JSON_HL.highlight(body_text)
+
         out.append(body_text)
         self._value_static.update(out)
 
@@ -364,6 +393,7 @@ class UI(App):
         # corrupt the TUI. Restored on unmount.
         self._null = open(os.devnull, "w")
         self._prev_stream = logger._stream
+
         logger.set_stream(self._null)
         events.subscribe(self._on_event)
         # Dev-only: arm breakpoints so lane.breakpoint() calls pause here.
@@ -375,50 +405,64 @@ class UI(App):
         self._refresh_env()
         self.set_interval(1.0, self._refresh_env)
         self.set_interval(0.1, self._tick_spinner)
+
         self._start_monotonic = monotonic()
+
         self.set_interval(0.1, self._update_status)
         self._init_stats()
+
         # Daemon thread: the pipeline keeps running off the UI thread, and
         # quitting the app can't hang on a run-forever loop.
         self._worker = threading.Thread(target=self._run_pipeline, daemon=True)
+
         self._worker.start()
 
     def _init_stats(self):
         # Live RAM/CPU/network in the bottom bar — only when psutil is present.
         self._proc = None
+
         if psutil is None:
             return
+
         try:
             self._proc = psutil.Process(os.getpid())
+
             self._proc.cpu_percent(None)  # prime (first call returns 0.0)
+
             self._net_prev = psutil.net_io_counters()
             self._net_prev_t = monotonic()
         except Exception:
             self._proc = None
+
             return
+
         self.set_interval(2.0, self._sample_stats)
         self._sample_stats()
 
     def _sample_stats(self):
         if self._proc is None:
             return
+
         try:
             rss = self._proc.memory_info().rss
             cpu = self._proc.cpu_percent(None)
             now = monotonic()
             net = psutil.net_io_counters()
             elapsed = now - self._net_prev_t
+
             if elapsed > 0:
                 down = (net.bytes_recv - self._net_prev.bytes_recv) / elapsed
                 up = (net.bytes_sent - self._net_prev.bytes_sent) / elapsed
             else:
                 down = up = 0.0
+
             self._net_prev = net
             self._net_prev_t = now
         except Exception:
             return
 
         text = Text(style="bright_black")
+
         text.append(f"RAM {fmt_bytes(rss)}")
         text.append("   ")
         text.append(f"CPU {cpu:.0f}%")
@@ -444,6 +488,7 @@ class UI(App):
         if getattr(self, "_orig_call_handlers", None) is not None:
             logging.Logger.callHandlers = self._orig_call_handlers  # type: ignore[assignment]
             root = logging.getLogger()
+
             for handler in getattr(self, "_detached_handlers", []):
                 root.addHandler(handler)
 
@@ -461,6 +506,7 @@ class UI(App):
         loguru handlers for the duration, add our sink, and restore a default
         stderr handler on unmount.
         """
+
         self._loguru_id = None
         self._loguru_removed = False
 
@@ -471,16 +517,23 @@ class UI(App):
                 record = message.record
                 text = record["message"]
                 exc = record["exception"]
+
                 if exc is not None:
                     import traceback as _tb
 
-                    text = f"{text}\n" + "".join(
-                        _tb.format_exception(exc.type, exc.value, exc.traceback)
-                    ).rstrip()
+                    text = (
+                        f"{text}\n"
+                        + "".join(
+                            _tb.format_exception(exc.type, exc.value, exc.traceback)
+                        ).rstrip()
+                    )
+
                 source = f"{record['name']}:{record['function']}:{record['line']}"
+
                 self._on_log(record["level"].name, text, source)
 
             loguru_logger.remove()  # drop the default stderr handler
+
             self._loguru_removed = True
             # TRACE so the watchers' trace-level logs reach the pane (TRACE < DEBUG).
             self._loguru_id = loguru_logger.add(sink, level="TRACE")
@@ -498,10 +551,12 @@ class UI(App):
         no flood from chatty libraries, no need to mute anything. Existing root
         console handlers are detached so libraries can't paint over the TUI.
         """
+
         root = logging.getLogger()
         self._detached_handlers = [
             h for h in list(root.handlers) if isinstance(h, logging.StreamHandler)
         ]
+
         for handler in self._detached_handlers:
             root.removeHandler(handler)
 
@@ -511,13 +566,17 @@ class UI(App):
 
         def tap(logger_self, record):
             original(logger_self, record)
+
             try:
                 message = record.getMessage()
+
                 if record.exc_info:
                     message = f"{message}\n{logging.Formatter().formatException(record.exc_info).rstrip()}"
                 elif record.exc_text:
                     message = f"{message}\n{record.exc_text.rstrip()}"
+
                 source = f"{record.name}:{record.funcName}:{record.lineno}"
+
                 forward(record.levelname, message, source)
             except Exception:
                 pass
@@ -545,11 +604,30 @@ class UI(App):
             error_text = str(error)
         finally:
             sys.stdout.flush()
+
             sys.stdout = prev_stdout
 
         elapsed = fmt_elapsed(self._elapsed())
-        if error_text is not None:
-            final = Text(f"Error: {error_text}", style="bold red")
+
+        # l2l catches lane errors internally (logs + terminates) rather than
+        # re-raising, so check its global error count, not just a bubbled error.
+        error_count = 0
+
+        try:
+            from l2l import Lane
+
+            error_count = Lane.global_errors_count()
+
+        except Exception:
+            pass
+
+        if error_text is not None or error_count:
+            label = f"Failed after {elapsed}"
+
+            if error_count > 1:
+                label += f" · {error_count} errors"
+
+            final = Text(label, style="bold red")
         else:
             final = Text(f"Done in {elapsed}", style="bold green")
 
@@ -569,23 +647,29 @@ class UI(App):
         # Wall-clock since start, excluding time parked at breakpoints. While
         # paused the clock is pinned to when the pause began.
         end = self._pause_started if self._pause_started is not None else monotonic()
+
         return end - self._start_monotonic - self._paused_total
 
     def _update_status(self):
         # Live elapsed timer while running; the final ✓/✕ is set on completion.
         if self._finished:
             return
+
         # Amber while frozen at a breakpoint, yellow while running.
         style = "bold #fbbf24" if self._pause_started is not None else "bold yellow"
+
         self._status_bar.update(Text(fmt_elapsed(self._elapsed()), style=style))
 
     def _finalize_active(self):
         for run_id in list(self._active):
             entry = self._run_to_node.get(run_id)
+
             if entry is not None:
                 if entry.state == "active":
                     entry.state = "done"
+
                 self._render_node(entry)
+
             self._active.discard(run_id)
 
     # ---- l2l callbacks (fire on the worker thread) -----------------------
@@ -600,6 +684,7 @@ class UI(App):
         # thread, so the frames are the real caller).
         if source is None:
             source = self._origin_from_stack()
+
         try:
             self.call_from_thread(self._add_log, level, message, source)
         except Exception:
@@ -607,13 +692,18 @@ class UI(App):
 
     def _origin_from_stack(self) -> Optional[str]:
         """First caller frame outside the logging plumbing → 'module:func:line'."""
+
         skip = {__name__, "l2l.logger"}
         frame = sys._getframe()
+
         while frame is not None:
             module = frame.f_globals.get("__name__") or ""
+
             if module not in skip and not module.startswith("textual"):
                 return f"{module}:{frame.f_code.co_name}:{frame.f_lineno}"
+
             frame = frame.f_back
+
         return None
 
     # ---- UI-thread handlers ---------------------------------------------
@@ -632,31 +722,40 @@ class UI(App):
     def _add_struct_node(self, lane_cls, parent_node, siblings, seen):
         if lane_cls in seen:  # guard against cyclic lane references
             return
+
         seen = seen | {lane_cls}
 
         name = lane_cls.first_name()
         node = parent_node.add(name, expand=True, allow_expand=False)
         entry = _NodeState(node, name)
+
         siblings.setdefault(name, entry)
+
         children: Dict[str, _NodeState] = {}
         self._struct_children[id(entry)] = children
+
         self._render_node(entry)
 
         lanes = lane_cls.get_lanes()
+
         for priority in sorted(lanes):
             ref = lanes[priority]
+
             if ref is None:
                 continue
+
             try:
                 resolved = lane_cls._resolve_lane_reference(ref)
             except Exception:
                 resolved = None
+
             if isinstance(resolved, type):
                 self._add_struct_node(resolved, node, children, seen)
             # Mock/dict (anonymous groups) are matched lazily at runtime instead.
 
     def _node_for(self, run_id, name, parent_id) -> _NodeState:
         entry = self._run_to_node.get(run_id)
+
         if entry is not None:
             return entry
 
@@ -666,9 +765,12 @@ class UI(App):
         )
 
         match = siblings.get(name) if siblings else None
+
         if match is not None and id(match) not in self._claimed:
             self._claimed.add(id(match))
+
             self._run_to_node[run_id] = match
+
             return match
 
         # Not in the pre-built structure (goto/Mock/duplicate, or no lane passed)
@@ -677,14 +779,19 @@ class UI(App):
         node = parent_node.add(name, expand=True, allow_expand=False)
         entry = _NodeState(node, name)
         self._struct_children[id(entry)] = {}
+
         if siblings is not None:
             siblings[f"{name}\x00{run_id}"] = entry
+
         self._run_to_node[run_id] = entry
+
         self._render_node(entry)
+
         return entry
 
     def _apply_event(self, kind: str, payload: dict):
         run_id = payload.get("run_id")
+
         if run_id is None:
             return
 
@@ -693,14 +800,17 @@ class UI(App):
                 run_id, payload.get("name"), payload.get("parent_id")
             )
             entry.state = "active"
+
             self._active.add(run_id)
             self._render_node(entry)
 
         elif kind == "lane_idle":
             entry = self._run_to_node.get(run_id)
+
             if entry is not None:
                 entry.state = "done"
                 entry.work = payload.get("work")
+
                 self._active.discard(run_id)
                 self._render_node(entry)
             if "value" in payload:
@@ -708,6 +818,7 @@ class UI(App):
 
         elif kind == "lane_done":
             entry = self._run_to_node.get(run_id)
+
             if entry is not None:
                 if payload.get("terminated"):
                     entry.state = "terminated"
@@ -715,13 +826,16 @@ class UI(App):
                     entry.state = "done"
                 if payload.get("work") is not None:
                     entry.work = payload.get("work")
+
                 self._active.discard(run_id)
                 self._render_node(entry)
 
         elif kind == "lane_terminated":
             entry = self._run_to_node.get(run_id)
+
             if entry is not None:
                 entry.state = "terminated"
+
                 self._active.discard(run_id)
                 self._render_node(entry)
 
@@ -730,26 +844,34 @@ class UI(App):
                 run_id, payload.get("name"), payload.get("parent_id")
             )
             entry.state = "paused"
+
             self._active.discard(run_id)
+
             # Freeze the timer at the first concurrent pause.
             if not self._paused:
                 self._pause_started = monotonic()
+
             self._paused.add(run_id)
             self._render_node(entry)
             self._sync_hotkeys()
 
         elif kind == "lane_resumed":
             self._paused.discard(run_id)
+
             # Resume the timer once nothing is paused anymore.
             if not self._paused and self._pause_started is not None:
                 self._paused_total += monotonic() - self._pause_started
                 self._pause_started = None
+
             entry = self._run_to_node.get(run_id)
+
             if entry is not None:
                 # Back to running — process() continues after the breakpoint.
                 entry.state = "active"
+
                 self._active.add(run_id)
                 self._render_node(entry)
+
             self._sync_hotkeys()
 
     def _render_node(self, entry: _NodeState):
@@ -780,11 +902,13 @@ class UI(App):
 
         for run_id in list(self._active):
             entry = self._run_to_node.get(run_id)
+
             if entry is not None:
                 self._render_node(entry)
 
     def _add_log(self, level: str, message: str, source: Optional[str] = None):
         self._level_counts[level] = self._level_counts.get(level, 0) + 1
+
         self._sync_level_checkbox(level)
         self._records.append((datetime.now(), level, message, source))
 
@@ -803,10 +927,13 @@ class UI(App):
         if checkbox is None:
             # TRACE is noisy (lane lifecycle + watchers) — off by default.
             on = level not in LEVELS_OFF_BY_DEFAULT
+
             if on:
                 self._enabled_levels.add(level)
+
             checkbox = _Checkbox(label, value=on, name=level)
             self._level_checkboxes[level] = checkbox
+
             try:
                 self.query_one("#filters").mount(
                     checkbox,
@@ -838,6 +965,7 @@ class UI(App):
 
         if self._show_level:
             color = LEVEL_COLOR.get(level, "white")
+
             parts.append(Text(f"{level:<7} ", style=color))
 
         if self._show_source:
@@ -846,7 +974,9 @@ class UI(App):
         body = (
             self._render_body(message) if self._show_rich else Text.from_ansi(message)
         )
+
         parts.append(body)
+
         return Text.assemble(*parts)
 
     def _render_body(self, message: str) -> Text:
@@ -864,7 +994,9 @@ class UI(App):
                 pass
             else:
                 pretty = Text("\n" + json.dumps(obj, indent=2, ensure_ascii=False))
+
                 JSON_HL.highlight(pretty)
+
                 return pretty
 
         # Keep ANSI from print() as-is; otherwise apply inline markdown.
@@ -879,7 +1011,9 @@ class UI(App):
             for ts, level, message, source in self._records
             if self._passes_filter(level, message)
         ]
+
         self._log_static.update(Text("\n").join(lines) if lines else Text(""))
+
         if self._autoscroll:
             self._log_view.scroll_end(animate=False)
 
@@ -898,6 +1032,7 @@ class UI(App):
         # Display toggles (top-right) vs level filters.
         if name.startswith("show:"):
             option = name.split(":", 1)[1]
+
             if option == "time":
                 self._show_time = event.value
             elif option == "level":
@@ -911,7 +1046,9 @@ class UI(App):
                 self._left.display = event.value
             elif option == "src":
                 self._show_source = event.value
+
             self._render_log()
+
             return
 
         if event.value:
@@ -924,12 +1061,14 @@ class UI(App):
     @on(Input.Changed, "#search")
     def _on_search(self, event: Input.Changed):
         self._search = event.value
+
         self._refilter()
 
     def _sync_hotkeys(self):
         # Reflect paused state in the bottom bar (skip once the run is done).
         if self._finished:
             return
+
         self._hotkeys.update(HOTKEYS_PAUSED if self._paused else HOTKEYS_RUNNING)
 
     def action_continue_lane(self):
@@ -944,6 +1083,7 @@ class UI(App):
         # Quit immediately once the run is done; otherwise confirm first.
         if self._finished:
             self.exit()
+
             return
 
         def _on_result(confirmed: Optional[bool]):

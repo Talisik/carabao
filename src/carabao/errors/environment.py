@@ -13,6 +13,7 @@ class MissingEnvError(Exception):
         Args:
             name: The name of the missing environment variable.
         """
+
         self.name = name
 
         super().__init__(

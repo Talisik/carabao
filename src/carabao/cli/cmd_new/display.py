@@ -151,6 +151,7 @@ class Display(App):
                                 True,
                                 id="use-filename",
                             )
+
                             yield self.use_filename
                             yield Label("Use Filename as Name?")
 

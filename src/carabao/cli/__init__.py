@@ -23,6 +23,7 @@ def _require_standard():
     ``standard`` extra (``pip install carabao[standard]``). Exits with a
     helpful message if it is missing.
     """
+
     try:
         import textual  # noqa: F401
         import textual_slider  # noqa: F401
@@ -32,6 +33,7 @@ def _require_standard():
             "Install them with: pip install carabao[standard]",
             fg=typer.colors.RED,
         )
+
         raise typer.Exit(1)
 
 
@@ -64,6 +66,7 @@ def dev(
     Args:
         name: The name of the lane to run.
     """
+
     sys.path.insert(0, os.getcwd())
 
     cfg_test_mode = test_mode if test_mode is not None else SECRET_CFG.test_mode
@@ -74,6 +77,7 @@ def dev(
             dev_mode=True,
             test_mode=cfg_test_mode,
         )
+
         return
 
     # Interactive selector needs the optional UI dependencies.
@@ -171,6 +175,7 @@ def run(
 
     This starts the Core with the default settings suitable for production.
     """
+
     sys.path.insert(0, os.getcwd())
     Core.start(
         name=name if name else None,
@@ -199,6 +204,7 @@ def init(
     Args:
         skip: Whether to skip all interactive prompts.
     """
+
     prompter = Prompter()
 
     prompter.set("skip", skip)
@@ -275,6 +281,7 @@ def new(
 
     If no lane directories are configured, the command will display an error.
     """
+
     sys.path.insert(0, os.getcwd())
 
     _require_standard()
@@ -293,6 +300,7 @@ def new(
             "No lane directories found!",
             fg=typer.colors.RED,
         )
+
         return
         # raise Exception("Lane directory not found!")
 
@@ -334,6 +342,7 @@ def new(
                 fg=typer.colors.GREEN,
             )
         )
+
         return
 
     typer.secho(

@@ -196,6 +196,7 @@ class NewEnv(Prompter.Component):
         if not os.path.exists(".env.release"):
             with open(".env.release", "wb") as f:
                 f.write(b"")
+
         typer.echo(
             typer.style(
                 "Created .env.release.",

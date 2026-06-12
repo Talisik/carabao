@@ -21,6 +21,7 @@ class Settings:
     """
 
     PROCESSES: Optional[int]
+
     """
     The number of processes to use for the framework.
     
@@ -29,6 +30,7 @@ class Settings:
     """
 
     LANE_DIRECTORIES: Iterable[str]
+
     """
     A collection of directory paths where lane modules are located.
     
@@ -37,6 +39,7 @@ class Settings:
     """
 
     DEPLOY_SAFELY: bool
+
     """
     Controls production safety settings.
     
@@ -45,6 +48,7 @@ class Settings:
     """
 
     SINGLE_RUN: bool
+
     """
     Controls the execution mode of the framework.
     
@@ -53,6 +57,7 @@ class Settings:
     """
 
     SLEEP_MIN: float
+
     """
     Minimum sleep time between lane executions.
     
@@ -61,6 +66,7 @@ class Settings:
     """
 
     SLEEP_MAX: float
+
     """
     Maximum sleep time between lane executions.
     
@@ -69,6 +75,7 @@ class Settings:
     """
 
     EXIT_ON_FINISH: bool
+
     """
     Controls framework termination behavior.
     
@@ -77,6 +84,7 @@ class Settings:
     """
 
     EXIT_DELAY: float
+
     """
     Grace period before framework termination.
     
@@ -121,6 +129,7 @@ class Settings:
         Raises:
             ValueError: If the setting key is not found in any of the checked locations.
         """
+
         if key in os.environ and hasattr(C, key):
             value = getattr(C, key)
 
@@ -153,6 +162,7 @@ class Settings:
         Returns:
             Any: The result of the initialization process.
         """
+
         pass
 
     @classmethod
@@ -169,6 +179,7 @@ class Settings:
         Returns:
             Any: The result to be used in place of the failed operation.
         """
+
         pass
 
     @final
@@ -191,6 +202,7 @@ class Settings:
         Returns:
             Type[Settings]: The user-defined Settings class or the base Settings class.
         """
+
         settings_module = PUBLIC_CFG.settings
 
         try:
@@ -204,6 +216,7 @@ class Settings:
         # Find the class that inherits from Settings
         for attr_name in dir(settings):
             attr = getattr(settings, attr_name)
+
             if (
                 isinstance(attr, type)
                 and issubclass(attr, Settings)

@@ -38,6 +38,7 @@ class Core:
         Returns:
             Optional[str]: The name of the instance if set, None otherwise.
         """
+
         return cls.__name
 
     @classmethod
@@ -48,6 +49,7 @@ class Core:
         Returns:
             bool: True if in development mode, False otherwise.
         """
+
         return cls.__dev_mode
 
     @classmethod
@@ -58,6 +60,7 @@ class Core:
         Returns:
             Optional[bool]: True if in test mode, False if not, None if not set.
         """
+
         return cls.__test_mode
 
     @classmethod
@@ -77,6 +80,7 @@ class Core:
             dev_mode: Whether to run in development mode
             test_mode: Whether to run in test mode
         """
+
         if cls.__started:
             return
 
@@ -105,6 +109,7 @@ class Core:
             exit_on_finish: Overrides the EXIT_ON_FINISH setting when not None.
                 The UI passes False so the loop never calls exit().
         """
+
         cls.initialize(
             name=name,
             dev_mode=dev_mode,
@@ -135,6 +140,7 @@ class Core:
         Args:
             settings: The settings object containing the LANE_DIRECTORIES configuration.
         """
+
         _ = [
             lane
             for lane_directory in settings.value_of("LANE_DIRECTORIES")
@@ -150,6 +156,7 @@ class Core:
         purely-async queue would falsely look like it has sync lanes, and
         ``Lane.start`` would then raise 'No lanes found'.
         """
+
         return any(
             lane.primary() and not lane.passive() and lane.condition(name)
             for lane in root.available_lanes()
@@ -168,6 +175,7 @@ class Core:
         ``LazyMain`` can detect whether any work was done. A queue name may match
         lanes in either registry (or both).
         """
+
         has_sync = Core.__has_primary(Lane, name)
         has_async = Core.__has_primary(AsyncLane, name)
 
@@ -220,6 +228,7 @@ class Core:
         Raises:
             MissingEnvError: If required environment variables are not set
         """
+
         if not C.IN_DEVELOPMENT and not C.TESTING:
             try:
                 from loguru import logger
@@ -262,6 +271,7 @@ class Core:
             exit_delay=settings.value_of("EXIT_DELAY"),
             error_handler=settings.error_handler,
         )
+
         for loop in main:
             loop(
                 C.QUEUE_NAME,
