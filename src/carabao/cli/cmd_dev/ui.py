@@ -21,6 +21,8 @@ from rich.text import Text
 from textual import on
 from textual.app import App
 from textual.binding import Binding
+from textual.geometry import Offset
+from textual.selection import Selection
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import (
@@ -104,6 +106,83 @@ class _Checkbox(Checkbox):
     BUTTON_RIGHT = ""
 
 
+def _is_word_char(char: str) -> bool:
+    return char.isalnum() or char == "_"
+
+
+class _LogStatic(Static):
+    """Log pane that selects a word on double-click, a line on triple-click.
+
+    Textual's default double-click selects the *entire* widget (one giant
+    multi-line blob, since the log is a single Static). This overrides that with
+    word/line selection at the click position.
+    """
+
+    #: Plain text of the current content (set by the UI on every render), used
+    #: to find word/line boundaries — the offsets are logical, so wrapping is OK.
+    plain_text: str = ""
+
+    async def _on_click(self, event):
+        if event.chain == 2:
+            self._select_at(event, word=True)
+            event.stop()
+        elif event.chain == 3:
+            self._select_at(event, word=False)
+            event.stop()
+        # Single click / drag: leave default range-selection alone.
+
+    def _select_at(self, event, word: bool):
+        widget, offset = self.screen.get_widget_and_offset_at(
+            event.screen_x, event.screen_y
+        )
+
+        if widget is not self or offset is None:
+            return
+
+        col, row = offset.x, offset.y
+        lines = self.plain_text.splitlines()
+
+        if not (0 <= row < len(lines)):
+            return
+
+        line = lines[row]
+
+        if word:
+            start, end = self._word_bounds(line, col)
+
+            if start == end:  # not on a word (whitespace/punctuation)
+                return
+        else:
+            start, end = 0, len(line)
+
+        self.screen.selections = {
+            self: Selection(Offset(start, row), Offset(end, row))
+        }
+
+    @staticmethod
+    def _word_bounds(line: str, col: int):
+        n = len(line)
+
+        if n == 0:
+            return 0, 0
+
+        if col >= n:
+            col = n - 1
+
+        if col < 0 or not _is_word_char(line[col]):
+            return col, col
+
+        start = col
+        while start > 0 and _is_word_char(line[start - 1]):
+            start -= 1
+
+        end = col + 1
+        while end < n and _is_word_char(line[end]):
+            end += 1
+
+        return start, end
+
+
 class _ConfirmQuit(ModalScreen[bool]):
     """Confirmation shown when quitting while the pipeline is still running."""
 
@@ -152,6 +231,104 @@ class _ConfirmQuit(ModalScreen[bool]):
         self.dismiss(False)
 
 
+# Display toggles: (label, option, hotkey, UI state attribute).
+_DISPLAY_TOGGLES = [
+    ("panel", "panel", "p", "_show_panel"),
+    ("time", "time", "t", "_show_time"),
+    ("lvl", "level", "l", "_show_level"),
+    ("src", "src", "s", "_show_source"),
+    ("rich", "rich", "r", "_show_rich"),
+    ("scroll", "scroll", "o", "_autoscroll"),
+]
+
+
+class _FiltersModal(ModalScreen):
+    """Filters popup (opened with ``f``) — display toggles + level filters.
+
+    Keeps the top bar uncluttered on narrow terminals. Reads/writes filter
+    state on the parent ``UI`` so changes apply live behind the modal.
+    """
+
+    CSS = """
+    $accent: #3b82f6;
+    _FiltersModal { align: center middle; background: $surface 40%; }
+    #filters-box {
+        width: 32; height: auto; max-height: 90%; padding: 1 2;
+        border: round $accent; background: $surface;
+    }
+    #filters-box .filters-head { color: $accent; text-style: bold; margin-top: 1; }
+    #filters-box #display-toggles .filters-head { margin-top: 0; }
+    #filters-box Checkbox { width: 100%; height: 1; border: none; padding: 0; background: transparent; }
+    #filters-box Checkbox > .toggle--button { background: transparent; color: $panel; }
+    #filters-box Checkbox.-on > .toggle--button { background: transparent; color: $text-success; }
+    #level-toggles { height: auto; max-height: 12; }
+    .filters-foot { color: $text-muted; margin-top: 1; }
+    """
+
+    BINDINGS = [
+        Binding("f", "close", "Close"),
+        Binding("escape", "close", "Close"),
+        Binding("p", "toggle('panel')", "panel"),
+        Binding("t", "toggle('time')", "time"),
+        Binding("l", "toggle('level')", "lvl"),
+        Binding("s", "toggle('src')", "src"),
+        Binding("r", "toggle('rich')", "rich"),
+        Binding("o", "toggle('scroll')", "scroll"),
+    ]
+
+    def __init__(self, ui: "UI"):
+        super().__init__()
+        self._ui = ui
+
+    def compose(self):
+        ui = self._ui
+
+        with Vertical(id="filters-box"):
+            yield Label("Display", classes="filters-head")
+
+            with Vertical(id="display-toggles"):
+                for label, option, hotkey, attr in _DISPLAY_TOGGLES:
+                    yield _Checkbox(
+                        f"{label} ({hotkey})",
+                        value=getattr(ui, attr),
+                        name=f"show:{option}",
+                        id=f"cb-{option}",
+                    )
+
+            yield Label("Levels", classes="filters-head")
+
+            with VerticalScroll(id="level-toggles"):
+                for level in sorted(ui._level_counts):
+                    count = abbrev_count(ui._level_counts[level])
+                    yield _Checkbox(
+                        f"{level} {count}",
+                        value=level in ui._enabled_levels,
+                        name=level,
+                    )
+
+            yield Label("esc / f  close", classes="filters-foot")
+
+    @on(Checkbox.Changed)
+    def _changed(self, event: Checkbox.Changed):
+        name = event.checkbox.name
+
+        if not name:
+            return
+
+        if name.startswith("show:"):
+            self._ui._set_display(name.split(":", 1)[1], event.value)
+        else:
+            self._ui._set_level(name, event.value)
+
+    def action_toggle(self, option: str):
+        # Flip the checkbox; its Changed event applies the state.
+        checkbox = self.query_one(f"#cb-{option}", _Checkbox)
+        checkbox.value = not checkbox.value
+
+    def action_close(self):
+        self.dismiss()
+
+
 class _NodeState:
     __slots__ = ("node", "name", "state", "work")
 
@@ -167,9 +344,14 @@ class UI(App):
 
     CSS_PATH = "ui.tcss"
 
+    # Don't auto-focus the search box on mount — keep keystrokes free for the
+    # f / c / / hotkeys. `/` focuses search when the user wants it.
+    AUTO_FOCUS = None
+
     BINDINGS = [
         Binding("escape", "request_quit", "Quit", priority=True),
         Binding("slash", "focus_search", "Search"),
+        Binding("f", "open_filters", "Filters"),
         Binding("c", "continue_lane", "Continue"),
     ]
 
@@ -209,11 +391,10 @@ class UI(App):
         # (timestamp, level, message, source) — source is "module:func:line"
         # or None when the origin is unknown (l2l logger, print()).
         self._records: List[Tuple[datetime, str, str, Optional[str]]] = []
-        # Level filter checkboxes are created on first sighting of each level
-        # (so a level with no logs shows no checkbox), labeled with a count.
+        # Levels seen (with counts) and which are enabled. The filter checkboxes
+        # are built fresh each time the filters modal opens.
         self._enabled_levels: set = set()
         self._level_counts: Dict[str, int] = {}
-        self._level_checkboxes: Dict[str, _Checkbox] = {}
         self._search: str = ""
         self._frame = 0
         # Display toggles (top-right of the log pane).
@@ -228,23 +409,9 @@ class UI(App):
     # ---- layout ----------------------------------------------------------
 
     def compose(self):
-        # Filters + search span the full width, above both panes. Level filter
-        # checkboxes are added dynamically as levels appear (see _add_log).
-        with Horizontal(id="filters"):
-            # Spacer pushes the display toggles to the top-right.
-            yield Static(id="filters-spacer")
-
-            for label, key, default in (
-                ("panel", "show:panel", True),
-                ("time", "show:time", True),
-                ("lvl", "show:level", True),
-                ("src", "show:src", False),
-                ("rich", "show:rich", True),
-                ("scroll", "show:scroll", True),
-            ):
-                yield _Checkbox(label, value=default, name=key)
-
-        yield Input(placeholder="Search…", id="search")
+        # Search spans the top; display/level filters live in the `f` modal.
+        self._search_input = Input(placeholder="Search…", id="search")
+        yield self._search_input
 
         with Horizontal(id="body"):
             # Left pane: Lanes tree + Environment, in tabs.
@@ -297,7 +464,7 @@ class UI(App):
                 )
 
                 with self._log_view:
-                    self._log_static = Static(
+                    self._log_static = _LogStatic(
                         id="log-content",
                         markup=False,
                     )
@@ -390,6 +557,9 @@ class UI(App):
 
     def on_mount(self):
         self.title = self._run_title
+        # Don't auto-focus the search box — keep keystrokes free for hotkeys
+        # (f / c / /). `/` focuses search when the user actually wants it.
+        self.set_focus(None)
         # Route logs to the pane only; silence the console stream so it can't
         # corrupt the TUI. Restored on unmount.
         self._null = open(os.devnull, "w")
@@ -913,42 +1083,20 @@ class UI(App):
                 self._render_node(entry)
 
     def _add_log(self, level: str, message: str, source: Optional[str] = None):
+        first_sighting = level not in self._level_counts
         self._level_counts[level] = self._level_counts.get(level, 0) + 1
 
-        self._sync_level_checkbox(level)
+        # Enable a level by default the first time it's seen (TRACE excepted —
+        # it's noisy). The filter checkbox is built lazily by the filters modal.
+        if first_sighting and level not in LEVELS_OFF_BY_DEFAULT:
+            self._enabled_levels.add(level)
+
         self._records.append((datetime.now(), level, message, source))
 
         if len(self._records) > MAX_LINES:
             del self._records[: len(self._records) - MAX_LINES]
 
         self._render_log()
-
-    def _sync_level_checkbox(self, level: str):
-        # Create the level's filter checkbox on first sighting, and keep its
-        # label's count up to date. Any level (CRITICAL/SUCCESS/TRACE/PRINT/…)
-        # becomes toggleable; a level with no logs shows no checkbox.
-        label = f"{level} {abbrev_count(self._level_counts.get(level, 0))}"
-        checkbox = self._level_checkboxes.get(level)
-
-        if checkbox is None:
-            # TRACE is noisy (lane lifecycle + watchers) — off by default.
-            on = level not in LEVELS_OFF_BY_DEFAULT
-
-            if on:
-                self._enabled_levels.add(level)
-
-            checkbox = _Checkbox(label, value=on, name=level)
-            self._level_checkboxes[level] = checkbox
-
-            try:
-                self.query_one("#filters").mount(
-                    checkbox,
-                    before=self.query_one("#filters-spacer"),
-                )
-            except Exception:
-                pass
-        else:
-            checkbox.label = label
 
     def _passes_filter(self, level: str, message: str) -> bool:
         if level not in self._enabled_levels:
@@ -1018,7 +1166,10 @@ class UI(App):
             if self._passes_filter(level, message)
         ]
 
-        self._log_static.update(Text("\n").join(lines) if lines else Text(""))
+        content = Text("\n").join(lines) if lines else Text("")
+        # Keep the plain text for word/line selection boundary lookups.
+        self._log_static.plain_text = content.plain
+        self._log_static.update(content)
 
         if self._autoscroll:
             self._log_view.scroll_end(animate=False)
@@ -1028,47 +1179,43 @@ class UI(App):
 
     # ---- input events ----------------------------------------------------
 
-    @on(Checkbox.Changed)
-    def _on_checkbox(self, event: Checkbox.Changed):
-        name = event.checkbox.name
+    def _set_display(self, option: str, value: bool):
+        # Apply a display toggle (called by the filters modal).
+        if option == "time":
+            self._show_time = value
+        elif option == "level":
+            self._show_level = value
+        elif option == "rich":
+            self._show_rich = value
+        elif option == "scroll":
+            self._autoscroll = value
+        elif option == "panel":
+            self._show_panel = value
+            self._left.display = value
+        elif option == "src":
+            self._show_source = value
 
-        if name is None:
-            return
+        self._render_log()
 
-        # Display toggles (top-right) vs level filters.
-        if name.startswith("show:"):
-            option = name.split(":", 1)[1]
-
-            if option == "time":
-                self._show_time = event.value
-            elif option == "level":
-                self._show_level = event.value
-            elif option == "rich":
-                self._show_rich = event.value
-            elif option == "scroll":
-                self._autoscroll = event.value
-            elif option == "panel":
-                self._show_panel = event.value
-                self._left.display = event.value
-            elif option == "src":
-                self._show_source = event.value
-
-            self._render_log()
-
-            return
-
-        if event.value:
-            self._enabled_levels.add(name)
+    def _set_level(self, level: str, value: bool):
+        # Toggle a level filter (called by the filters modal).
+        if value:
+            self._enabled_levels.add(level)
         else:
-            self._enabled_levels.discard(name)
+            self._enabled_levels.discard(level)
 
-        self._refilter()
+        self._render_log()
 
     @on(Input.Changed, "#search")
     def _on_search(self, event: Input.Changed):
         self._search = event.value
 
         self._refilter()
+
+    @on(Input.Submitted, "#search")
+    def _on_search_submit(self):
+        # Enter in the search box defocuses (doesn't quit the app).
+        self.set_focus(None)
 
     def _sync_hotkeys(self):
         # Reflect paused state in the bottom bar (skip once the run is done).
@@ -1085,7 +1232,27 @@ class UI(App):
     def action_focus_search(self):
         self.query_one("#search", Input).focus()
 
+    def action_open_filters(self):
+        # Don't stack multiple modals.
+        if isinstance(self.screen, _FiltersModal):
+            return
+
+        self.push_screen(_FiltersModal(self))
+
     def action_request_quit(self):
+        # A modal is open (filters / confirm) — Esc closes it, not the app.
+        # (The app's escape binding is priority, so it runs before the modal's.)
+        if len(self.screen_stack) > 1:
+            self.pop_screen()
+
+            return
+
+        # Esc while typing in search just defocuses — doesn't quit.
+        if self.focused is self._search_input:
+            self.set_focus(None)
+
+            return
+
         # Quit immediately once the run is done; otherwise confirm first.
         if self._finished:
             self.exit()

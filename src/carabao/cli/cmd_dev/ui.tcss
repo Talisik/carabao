@@ -11,11 +11,6 @@ Screen { background: transparent; }
 #value { background: transparent; }
 #value-content { width: 1fr; height: auto; background: transparent; padding: 0 1; }
 #logs { width: 1fr; margin-left: 2; background: transparent; }
-#filters { height: auto; padding: 0 1; background: transparent; }
-#filters-spacer { width: 1fr; height: 1; background: transparent; }
-#filters Checkbox { width: auto; height: 1; border: none; padding: 0; margin-right: 2; background: transparent; }
-#filters Checkbox > .toggle--button { background: transparent; color: $panel; }
-#filters Checkbox.-on > .toggle--button { background: transparent; color: $text-success; }
 /* Thin border puts the text on the inner row → vertically centered. */
 #search { width: 1fr; background: transparent; border: round $accent; height: auto; margin-bottom: 1; }
 #log { height: 1fr; background: transparent; }
