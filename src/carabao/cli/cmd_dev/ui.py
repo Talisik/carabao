@@ -206,8 +206,8 @@ class _ConfirmQuit(ModalScreen[bool]):
             yield Label("Pipeline is still running.\nQuit anyway?")
 
             with Horizontal(id="confirm-buttons"):
-                yield Button("[y] Quit", variant="error", id="confirm-yes")
-                yield Button("[n] Cancel", variant="primary", id="confirm-no")
+                yield Button("\\[y] Quit", variant="error", id="confirm-yes")
+                yield Button("\\[n] Cancel", variant="primary", id="confirm-no")
 
     @on(Button.Pressed, "#confirm-yes")
     def _yes(self):

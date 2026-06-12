@@ -27,6 +27,7 @@
 ```
 
 [GitHub](https://github.com/Talisik/carabao)
+[PyPI](https://pypi.org/project/carabao/)
 
 A Python library for building robust publisher-subscriber (pub/sub) frameworks with built-in lanes for common tasks.
 
