@@ -101,18 +101,6 @@ def _is_word_char(char: str) -> bool:
     return char.isalnum() or char == "_"
 
 
-def _next_log_path() -> str:
-    """First free ``moo.log`` / ``moo2.log`` / … in the cwd."""
-    candidate = "moo.log"
-    index = 2
-
-    while os.path.exists(candidate):
-        candidate = f"moo{index}.log"
-        index += 1
-
-    return candidate
-
-
 class _LogStatic(Static):
     """Log pane that selects a word on double-click, a line on triple-click.
 
@@ -510,8 +498,9 @@ class UI(App):
         # logs flow, so nothing is missed.
         if self._log_file_enabled:
             try:
-                path = _next_log_path()
-                self._log_fp = open(path, "w", encoding="utf-8")
+                from ..log_stream import next_log_path
+
+                self._log_fp = open(next_log_path(), "w", encoding="utf-8")
             except Exception:
                 self._log_fp = None
 

@@ -158,11 +158,23 @@ def dev(
             log_file=result.log_file,
         ).run()
     else:
-        Core.start(
-            name=result.name,
-            dev_mode=True,
-            test_mode=result.test_mode,
-        )
+        # No UI — still stream to the log file if the toggle is on.
+        stream = None
+
+        if result.log_file:
+            from .log_stream import FileLogStream, next_log_path
+
+            stream = FileLogStream(next_log_path()).start()
+
+        try:
+            Core.start(
+                name=result.name,
+                dev_mode=True,
+                test_mode=result.test_mode,
+            )
+        finally:
+            if stream is not None:
+                stream.stop()
 
 
 @app.command(
