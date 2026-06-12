@@ -40,10 +40,13 @@ LEVELS_OFF_BY_DEFAULT = {"TRACE"}
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
 #: Bottom-bar hotkey hints, per pipeline state.
-HOTKEYS_RUNNING = "[b]esc[/] quit   [b]/[/] search   [b]f[/] filters"
+HOTKEYS_RUNNING = "[b]esc[/] quit   [b]/[/] search   [b]f[/] levels   [b]d[/] display"
 # Highlight "esc quit" once the pipeline is done — the user can safely exit.
-HOTKEYS_DONE = "[b #ff4d4d]esc quit[/]   [b]/[/] search   [b]f[/] filters"
+HOTKEYS_DONE = (
+    "[b #ff4d4d]esc quit[/]   [b]/[/] search   [b]f[/] levels   [b]d[/] display"
+)
 # Shown while one or more lanes are parked at a breakpoint.
 HOTKEYS_PAUSED = (
-    "[b]esc[/] quit   [b]/[/] search   [b]f[/] filters   [b #fbbf24]c continue[/]"
+    "[b]esc[/] quit   [b]/[/] search   [b]f[/] levels   [b]d[/] display"
+    "   [b #fbbf24]c continue[/]"
 )

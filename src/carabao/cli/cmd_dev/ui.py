@@ -27,7 +27,6 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
-    Checkbox,
     Input,
     Label,
     Static,
@@ -49,7 +48,6 @@ from .constants import (
 )
 from .utils import (
     TRACEBACK_MARKER,
-    abbrev_count,
     fmt_bytes,
     fmt_elapsed,
     fmt_rate,
@@ -97,13 +95,6 @@ class _LogWriter:
 
     def isatty(self) -> bool:
         return False
-
-
-class _Checkbox(Checkbox):
-    """Checkbox without the ``▐ ▌`` side bars (the white block)."""
-
-    BUTTON_LEFT = ""
-    BUTTON_RIGHT = ""
 
 
 def _is_word_char(char: str) -> bool:
@@ -242,93 +233,6 @@ _DISPLAY_TOGGLES = [
 ]
 
 
-class _FiltersModal(ModalScreen):
-    """Filters popup (opened with ``f``) — display toggles + level filters.
-
-    Keeps the top bar uncluttered on narrow terminals. Reads/writes filter
-    state on the parent ``UI`` so changes apply live behind the modal.
-    """
-
-    CSS = """
-    $accent: #3b82f6;
-    _FiltersModal { align: center middle; background: $surface 40%; }
-    #filters-box {
-        width: 32; height: auto; max-height: 90%; padding: 1 2;
-        border: round $accent; background: $surface;
-    }
-    #filters-box .filters-head { color: $accent; text-style: bold; margin-top: 1; }
-    #filters-box #display-toggles .filters-head { margin-top: 0; }
-    #filters-box Checkbox { width: 100%; height: 1; border: none; padding: 0; background: transparent; }
-    #filters-box Checkbox > .toggle--button { background: transparent; color: $panel; }
-    #filters-box Checkbox.-on > .toggle--button { background: transparent; color: $text-success; }
-    #level-toggles { height: auto; max-height: 12; }
-    .filters-foot { color: $text-muted; margin-top: 1; }
-    """
-
-    BINDINGS = [
-        Binding("f", "close", "Close"),
-        Binding("escape", "close", "Close"),
-        Binding("p", "toggle('panel')", "panel"),
-        Binding("t", "toggle('time')", "time"),
-        Binding("l", "toggle('level')", "lvl"),
-        Binding("s", "toggle('src')", "src"),
-        Binding("r", "toggle('rich')", "rich"),
-        Binding("o", "toggle('scroll')", "scroll"),
-    ]
-
-    def __init__(self, ui: "UI"):
-        super().__init__()
-        self._ui = ui
-
-    def compose(self):
-        ui = self._ui
-
-        with Vertical(id="filters-box"):
-            yield Label("Display", classes="filters-head")
-
-            with Vertical(id="display-toggles"):
-                for label, option, hotkey, attr in _DISPLAY_TOGGLES:
-                    yield _Checkbox(
-                        f"{label} ({hotkey})",
-                        value=getattr(ui, attr),
-                        name=f"show:{option}",
-                        id=f"cb-{option}",
-                    )
-
-            yield Label("Levels", classes="filters-head")
-
-            with VerticalScroll(id="level-toggles"):
-                for level in sorted(ui._level_counts):
-                    count = abbrev_count(ui._level_counts[level])
-                    yield _Checkbox(
-                        f"{level} {count}",
-                        value=level in ui._enabled_levels,
-                        name=level,
-                    )
-
-            yield Label("esc / f  close", classes="filters-foot")
-
-    @on(Checkbox.Changed)
-    def _changed(self, event: Checkbox.Changed):
-        name = event.checkbox.name
-
-        if not name:
-            return
-
-        if name.startswith("show:"):
-            self._ui._set_display(name.split(":", 1)[1], event.value)
-        else:
-            self._ui._set_level(name, event.value)
-
-    def action_toggle(self, option: str):
-        # Flip the checkbox; its Changed event applies the state.
-        checkbox = self.query_one(f"#cb-{option}", _Checkbox)
-        checkbox.value = not checkbox.value
-
-    def action_close(self):
-        self.dismiss()
-
-
 class _NodeState:
     __slots__ = ("node", "name", "state", "work")
 
@@ -351,8 +255,15 @@ class UI(App):
     BINDINGS = [
         Binding("escape", "request_quit", "Quit", priority=True),
         Binding("slash", "focus_search", "Search"),
-        Binding("f", "open_filters", "Filters"),
+        Binding("f", "filter_bar('levels')", "Levels"),
+        Binding("d", "filter_bar('display')", "Display"),
+        Binding("q", "prev_tab", "Prev tab"),
+        Binding("e", "next_tab", "Next tab"),
         Binding("c", "continue_lane", "Continue"),
+    ] + [
+        # Number keys toggle the n-th item in the active filter strip.
+        Binding(str(digit), f"bar_item({digit})", show=False)
+        for digit in range(1, 10)
     ]
 
     def __init__(
@@ -405,6 +316,8 @@ class UI(App):
         self._show_panel = True
         self._show_source = False  # log call site (module:func:line)
         self._finished = False
+        # Bottom-bar mode: "normal" hotkeys, or "levels"/"display" filter strips.
+        self._bar_mode = "normal"
 
     # ---- layout ----------------------------------------------------------
 
@@ -792,15 +705,9 @@ class UI(App):
         except Exception:
             pass
 
-        if error_text is not None or error_count:
-            label = f"Failed after {elapsed}"
-
-            if error_count > 1:
-                label += f" · {error_count} errors"
-
-            final = Text(label, style="bold red")
-        else:
-            final = Text(f"Done in {elapsed}", style="bold green")
+        # Compact: just the elapsed time, green if clean, red if any errors.
+        failed = error_text is not None or error_count
+        final = Text(elapsed, style="bold red" if failed else "bold green")
 
         self._finished = True
 
@@ -810,7 +717,7 @@ class UI(App):
             # generators that were abandoned before fully draining.
             self.call_from_thread(self._finalize_active)
             self.call_from_thread(self._status_bar.update, final)
-            self.call_from_thread(self._hotkeys.update, HOTKEYS_DONE)
+            self.call_from_thread(self._render_bottom_bar)
         except Exception:
             pass
 
@@ -1218,11 +1125,61 @@ class UI(App):
         self.set_focus(None)
 
     def _sync_hotkeys(self):
-        # Reflect paused state in the bottom bar (skip once the run is done).
-        if self._finished:
-            return
+        # Kept for callers; the bottom bar tracks paused/filter state.
+        self._render_bottom_bar()
 
-        self._hotkeys.update(HOTKEYS_PAUSED if self._paused else HOTKEYS_RUNNING)
+    def _render_bottom_bar(self):
+        # The bottom-left area swaps between normal hotkeys and the filter
+        # strips (levels / display). Hide stats + mode while filtering for room.
+        filtering = self._bar_mode != "normal"
+        self._stats.display = not filtering
+
+        try:
+            self.query_one("#mode").display = not filtering
+        except Exception:
+            pass
+
+        if self._bar_mode == "levels":
+            self._hotkeys.update(self._levels_bar_text())
+        elif self._bar_mode == "display":
+            self._hotkeys.update(self._display_bar_text())
+        elif self._finished:
+            self._hotkeys.update(HOTKEYS_DONE)
+        elif self._paused:
+            self._hotkeys.update(HOTKEYS_PAUSED)
+        else:
+            self._hotkeys.update(HOTKEYS_RUNNING)
+
+    def _levels_bar_text(self) -> Text:
+        out = Text()
+        out.append("levels  ", style="bold #3b82f6")
+
+        for index, level in enumerate(sorted(self._level_counts), 1):
+            on = level in self._enabled_levels
+            style = LEVEL_COLOR.get(level, "white") if on else "bright_black"
+            key = str(index) if index <= 9 else "·"
+
+            out.append(f"{key}", style="bold" if on else "bold bright_black")
+            out.append(f"{'✓' if on else '·'}{level} ", style=style)
+
+        out.append("  esc/f back", style="bright_black")
+
+        return out
+
+    def _display_bar_text(self) -> Text:
+        out = Text()
+        out.append("display  ", style="bold #3b82f6")
+
+        for index, (label, _option, _hotkey, attr) in enumerate(_DISPLAY_TOGGLES, 1):
+            on = getattr(self, attr)
+            style = "#3fb950" if on else "bright_black"
+
+            out.append(f"{index}", style="bold" if on else "bold bright_black")
+            out.append(f"{'✓' if on else '·'}{label} ", style=style)
+
+        out.append("  esc/d back", style="bright_black")
+
+        return out
 
     def action_continue_lane(self):
         # Release every lane parked at a breakpoint.
@@ -1232,18 +1189,57 @@ class UI(App):
     def action_focus_search(self):
         self.query_one("#search", Input).focus()
 
-    def action_open_filters(self):
-        # Don't stack multiple modals.
-        if isinstance(self.screen, _FiltersModal):
-            return
+    def action_filter_bar(self, mode: str):
+        # Toggle a filter strip in the bottom bar (press again to go back).
+        self._bar_mode = "normal" if self._bar_mode == mode else mode
 
-        self.push_screen(_FiltersModal(self))
+        self._render_bottom_bar()
+
+    def action_bar_item(self, n: int):
+        # Number key toggles the n-th item in the active filter strip.
+        if self._bar_mode == "levels":
+            levels = sorted(self._level_counts)
+
+            if 1 <= n <= len(levels) and n <= 9:
+                level = levels[n - 1]
+                self._set_level(level, level not in self._enabled_levels)
+                self._render_bottom_bar()
+
+        elif self._bar_mode == "display":
+            if 1 <= n <= len(_DISPLAY_TOGGLES):
+                _label, option, _hotkey, attr = _DISPLAY_TOGGLES[n - 1]
+                self._set_display(option, not getattr(self, attr))
+                self._render_bottom_bar()
+
+    def action_prev_tab(self):
+        self._cycle_tab(-1)
+
+    def action_next_tab(self):
+        self._cycle_tab(1)
+
+    def _cycle_tab(self, step: int):
+        tabs = ["tab-lanes", "tab-env", "tab-value"]
+
+        try:
+            current = self._left.active
+            index = tabs.index(current)
+        except (ValueError, Exception):
+            index = 0
+
+        self._left.active = tabs[(index + step) % len(tabs)]
 
     def action_request_quit(self):
-        # A modal is open (filters / confirm) — Esc closes it, not the app.
+        # A modal is open (confirm) — Esc closes it, not the app.
         # (The app's escape binding is priority, so it runs before the modal's.)
         if len(self.screen_stack) > 1:
             self.pop_screen()
+
+            return
+
+        # Esc leaves a filter strip back to the normal hotkey bar.
+        if self._bar_mode != "normal":
+            self._bar_mode = "normal"
+            self._render_bottom_bar()
 
             return
 
