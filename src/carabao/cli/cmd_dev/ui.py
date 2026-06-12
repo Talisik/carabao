@@ -279,14 +279,9 @@ class UI(App):
             yield self._status_bar
 
     def _mode_text(self) -> str:
-        # The UI only ever runs under `moo dev`, so the mode is always DEV
-        # (optionally TEST when test mode is on).
-        parts = ["[b yellow]DEV[/]"]
-
-        if self._test_mode:
-            parts.append("[b blue]TEST[/]")
-
-        return "  ".join(parts)
+        # The UI only ever runs under `moo dev`, so DEV is implied — only flag
+        # the non-default TEST mode.
+        return "[b blue]TEST[/]" if self._test_mode else ""
 
     def _refresh_env(self):
         # Environment tab: the loaded .env file(s) + the env vars actually used.
