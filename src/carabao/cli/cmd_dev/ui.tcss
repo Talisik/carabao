@@ -34,5 +34,6 @@ Tree { background: transparent; }
 #bottombar { dock: bottom; height: 1; margin-top: 1; background: transparent; }
 #hotkeys { width: auto; color: $text-muted; margin-left: 1; }
 #bottombar-spacer { width: 1fr; }
+#stats { width: auto; color: $text-muted; margin-right: 2; }
 #mode { width: auto; margin-right: 2; }
 #status { width: auto; color: $text-muted; margin-right: 1; }

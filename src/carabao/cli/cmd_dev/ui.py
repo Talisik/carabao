@@ -45,7 +45,19 @@ from .constants import (
     MAX_LINES,
     SPINNER,
 )
-from .utils import abbrev_count, fmt_elapsed, format_value, inline_markdown
+from .utils import (
+    abbrev_count,
+    fmt_bytes,
+    fmt_elapsed,
+    fmt_rate,
+    format_value,
+    inline_markdown,
+)
+
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 
 class _LogWriter:
@@ -272,7 +284,7 @@ class UI(App):
                     )
                     yield self._log_static
 
-        # Bottom bar: hotkeys (left) … mode + timer (right).
+        # Bottom bar: hotkeys (left) … resource stats + mode + timer (right).
         with Horizontal(id="bottombar"):
             self._hotkeys = Static(
                 HOTKEYS_RUNNING,
@@ -280,6 +292,9 @@ class UI(App):
             )
             yield self._hotkeys
             yield Static(id="bottombar-spacer")
+            # System stats (RAM/CPU/network), shown only when psutil is present.
+            self._stats = Static(id="stats")
+            yield self._stats
             yield Static(self._mode_text(), id="mode")
             self._status_bar = Static(
                 "Running…",
@@ -358,10 +373,54 @@ class UI(App):
         self.set_interval(0.1, self._tick_spinner)
         self._start_monotonic = monotonic()
         self.set_interval(0.1, self._update_status)
+        self._init_stats()
         # Daemon thread: the pipeline keeps running off the UI thread, and
         # quitting the app can't hang on a run-forever loop.
         self._worker = threading.Thread(target=self._run_pipeline, daemon=True)
         self._worker.start()
+
+    def _init_stats(self):
+        # Live RAM/CPU/network in the bottom bar — only when psutil is present.
+        self._proc = None
+        if psutil is None:
+            return
+        try:
+            self._proc = psutil.Process(os.getpid())
+            self._proc.cpu_percent(None)  # prime (first call returns 0.0)
+            self._net_prev = psutil.net_io_counters()
+            self._net_prev_t = monotonic()
+        except Exception:
+            self._proc = None
+            return
+        self.set_interval(2.0, self._sample_stats)
+        self._sample_stats()
+
+    def _sample_stats(self):
+        if self._proc is None:
+            return
+        try:
+            rss = self._proc.memory_info().rss
+            cpu = self._proc.cpu_percent(None)
+            now = monotonic()
+            net = psutil.net_io_counters()
+            elapsed = now - self._net_prev_t
+            if elapsed > 0:
+                down = (net.bytes_recv - self._net_prev.bytes_recv) / elapsed
+                up = (net.bytes_sent - self._net_prev.bytes_sent) / elapsed
+            else:
+                down = up = 0.0
+            self._net_prev = net
+            self._net_prev_t = now
+        except Exception:
+            return
+
+        text = Text(style="bright_black")
+        text.append(f"RAM {fmt_bytes(rss)}")
+        text.append("   ")
+        text.append(f"CPU {cpu:.0f}%")
+        text.append("   ")
+        text.append(f"↓ {fmt_rate(down)}  ↑ {fmt_rate(up)}")
+        self._stats.update(text)
 
     def on_unmount(self):
         # Release anything parked at a breakpoint so the worker thread can end.
@@ -468,16 +527,6 @@ class UI(App):
         finally:
             sys.stdout.flush()
             sys.stdout = prev_stdout
-
-        # Pipeline done — stop the background watchers so they don't keep
-        # logging after the run finishes.
-        try:
-            from carabao.lanes import NetworkWatcher, ResourceWatcher
-
-            ResourceWatcher.stop()
-            NetworkWatcher.stop()
-        except Exception:
-            pass
 
         elapsed = fmt_elapsed(self._elapsed())
         if error_text is not None:

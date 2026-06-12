@@ -7,12 +7,17 @@ from rich.text import Text
 from .constants import MD_RE, MD_STYLE
 
 
-def _fmt_bytes(n: int) -> str:
-    """Human-readable byte size: 42 B, 1.2 KB, 3.4 MB."""
-    for divisor, suffix in ((1 << 20, "MB"), (1 << 10, "KB")):
+def fmt_bytes(n: int) -> str:
+    """Human-readable byte size: 42 B, 1.2 KB, 3.4 MB, 1.1 GB."""
+    for divisor, suffix in ((1 << 30, "GB"), (1 << 20, "MB"), (1 << 10, "KB")):
         if n >= divisor:
             return f"{n / divisor:.1f} {suffix}"
     return f"{n} B"
+
+
+def fmt_rate(bps: float) -> str:
+    """Human-readable throughput: 0 B/s, 1.2 KB/s, 3.4 MB/s."""
+    return f"{fmt_bytes(int(bps))}/s"
 
 
 def format_value(value, max_len: int = 4000):
@@ -43,7 +48,7 @@ def format_value(value, max_len: int = 4000):
 
     nbytes = len(body.encode("utf-8"))
     meta = type_name if size is None else f"{type_name} · {size}"
-    meta = f"{meta} · {_fmt_bytes(nbytes)}"
+    meta = f"{meta} · {fmt_bytes(nbytes)}"
 
     if len(body) > max_len:
         body = f"{body[:max_len]}… (+{len(body) - max_len} chars)"

@@ -33,10 +33,7 @@ A Python library for building robust publisher-subscriber (pub/sub) frameworks w
 ## Features
 
 -   Core framework for managing pub/sub systems based on l2l (lane2lane)
--   Built-in lanes for:
-    -   Database logging (`LogToDB`) - Records exceptions to MongoDB
-    -   Network health monitoring (`NetworkHealth`) - Tracks network ping times
-    -   Environment variable display (`PrettyEnv`) - Formats environment variables for debugging
+-   Live RAM / CPU / network stats in the dev UI status bar (when `psutil` is installed)
 -   Automatic configuration management with settings system
 -   Error handling with custom error handlers
 -   Clean shutdown with exit handlers
@@ -84,6 +81,46 @@ moo run
 ```
 
 No import statement is needed to start the framework.
+
+### Forms
+
+A lane can declare a `Form` — typed inputs the `moo dev` selector prompts for
+before running. Define an inner `Form` class with annotated attributes (or
+`Field(...)` for a bounded numeric slider), then read the values anywhere via
+the global `F`:
+
+```python
+from l2l import Lane
+
+from carabao import F, Field
+
+
+class Main(Lane):
+    class Form:
+        source: str = "synthetic"   # text input
+        batch_size: int = 100       # number input
+        threshold: float = 0.5
+        dry_run: bool = False       # checkbox
+        workers = Field(cast=int, default=4, min_value=1, max_value=8, step=1)  # slider
+
+    @classmethod
+    def primary(cls) -> bool:
+        return True
+
+    def process(self, value):
+        if F.dry_run:
+            ...
+        print(F.source, F.batch_size, F.workers)
+```
+
+-   Plain annotations become typed inputs: `str` → text, `int`/`float` → number,
+    `bool` → checkbox.
+-   `Field(cast=int, min_value=…, max_value=…, step=…)` renders a slider.
+-   Read values with `F.<name>` (or `F["<name>"]`). The selector remembers the
+    last-entered values per lane.
+-   Forms are optional — a lane without one just runs.
+
+![Form inputs in the dev selector](https://raw.githubusercontent.com/Talisik/carabao/main/previews/form.jpg)
 
 ### Environment Variables
 
@@ -231,36 +268,53 @@ moo new [lane_name]
 
 Requires the `standard` extra (`pip install "carabao[standard]"`).
 
-**Selector.** `moo dev` (no queue name) opens an interactive Textual screen:
+**Selector.** `moo dev` (no queue name) opens an interactive screen:
 
 -   Lists every available primary lane — both sync (`Lane`) and async
     (`AsyncLane`).
--   Shows the selected lane's docstring and a **Process Tree** built from its
-    `lanes` field (recursive — new sub-lanes appear automatically).
+-   Shows the selected lane's docstring and a **process tree** built from its
+    `lanes` field (recursive — sub-lanes appear automatically).
 -   Edits the lane's form fields (if it defines a `Form`).
 -   Toggles: **🧪 Test Mode** and **📊 UI** (the live visualizer; on by default).
 -   Remembers your last selection. `Enter` runs, `Esc` exits.
 
+![The dev queue selector](https://raw.githubusercontent.com/Talisik/carabao/main/previews/queue_selection.jpg)
+
 `moo dev <queue_name>` skips the selector and runs that lane directly.
 
-**Live UI / visualizer.** With the **📊 UI** toggle on, running a lane opens a
-live dashboard:
+**Live UI.** With the **📊 UI** toggle on, running a lane opens a live dashboard.
 
--   **Lane tree** — the full pipeline laid out from the `lanes` field up front;
-    each lane lights up (spinner) as it runs and shows `✓` + its true work time
-    when done.
--   **Log pane** — captures `print()`, the `l2l` logger, **loguru**, and the
-    stdlib `logging` module (including non-propagating loggers). Features:
-    -   selectable text (drag to select, `Ctrl+C` to copy)
-    -   pretty, syntax-highlighted JSON and inline markdown (`**bold**`,
-        `` `code` ``, `*italic*`, `~~strike~~`)
-    -   per-level filter checkboxes that appear only for levels seen, each with
-        a live count (`INFO 5K`)
-    -   `/` to search; top-right toggles for **tree**, **time**, **lvl**,
-        **rich**, and **scroll** (auto-scroll)
--   **Status** — a live elapsed timer while running, `Done in <time>` (green) or
-    `Error: …` (red) on completion. `Esc` quits (confirms first if still
-    running; the hotkey turns red once it's safe to exit).
+The **left panel** (toggle with **panel**) has tabs:
+
+-   **Lanes** — the full pipeline laid out from the `lanes` field up front; each
+    lane spins while active and shows its true work time when done.
+-   **Env** — the loaded `.env` file(s) and the env vars actually read.
+-   **Value** — the latest value flowing between lanes (type · count · bytes),
+    as pretty JSON.
+
+The **log pane** captures `print()`, the `l2l` logger, **loguru**, and the
+stdlib `logging` module (including non-propagating loggers):
+
+-   selectable text (drag to select, `Ctrl+C` to copy)
+-   syntax-highlighted JSON and inline markdown (`**bold**`, `` `code` ``,
+    `*italic*`, `~~strike~~`)
+-   per-level filter checkboxes that appear only for levels seen, each with a
+    live count (`INFO 5K`); `TRACE` is off by default
+-   `/` to search; top-right toggles for **time**, **lvl**, **rich**, **scroll**
+
+![The log pane](https://raw.githubusercontent.com/Talisik/carabao/main/previews/logs.jpg)
+
+**Breakpoints.** Call `self.breakpoint("label")` inside `process()` to pause the
+pipeline (dev-only — a no-op under `moo run`). The lane shows `⏸`, logs at the
+`PAUSE` level, and the timer freezes; inspect the payload in the **Value** tab,
+then press `c` to continue.
+
+![Breakpoints and the Value tab](https://raw.githubusercontent.com/Talisik/carabao/main/previews/breakpoints_and_value.jpg)
+
+The **status bar** shows live RAM / CPU / network (when `psutil` is installed)
+and an elapsed timer — `Done in <time>` (green) or `Error: …` (red) on
+completion. `Esc` quits (confirms first if still running; the hotkey turns red
+once it's safe to exit).
 
 Async lanes are detected automatically and run via `asyncio`; the core runtime
 (`moo run`) carries no overhead from any of the UI instrumentation.
