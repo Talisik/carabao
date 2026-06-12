@@ -100,7 +100,7 @@ class _ConfirmQuit(ModalScreen[bool]):
     }
     #confirm-box Label { width: 100%; text-align: center; margin-bottom: 1; }
     #confirm-buttons { height: auto; align: center middle; }
-    #confirm-buttons Button { margin: 0 1; border: none; color: white; text-style: bold; }
+    #confirm-buttons Button { margin: 0 1; border: none; height: 3; content-align: center middle; color: white; text-style: bold; }
     #confirm-yes { background: #f85149; }
     #confirm-yes:hover { background: #ff6b61; }
     #confirm-no { background: $accent; }
