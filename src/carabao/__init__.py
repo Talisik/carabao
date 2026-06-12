@@ -27,6 +27,18 @@ try:
 except Exception:
     pass
 
+try:
+    from .constants import amongo
+
+except Exception:
+    pass
+
+try:
+    from .constants import aredis
+
+except Exception:
+    pass
+
 
 def start():
     """
@@ -47,6 +59,8 @@ __all__ = [
     "redis",
     "es",
     "pg",
+    "amongo",
+    "aredis",
     "Field",
     "F",
     "Form",

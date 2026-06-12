@@ -940,10 +940,10 @@ class UI(App):
             entry = self._run_to_node.get(run_id)
 
             if entry is not None:
-                entry.state = "done"
+                # Stay active (spinner steady) between per-item calls; just
+                # update the work time. lane_done is what finalizes the node.
                 entry.work = payload.get("work")
 
-                self._active.discard(run_id)
                 self._render_node(entry)
             if "value" in payload:
                 self._record_value(payload.get("name"), payload["value"])
@@ -952,10 +952,10 @@ class UI(App):
             entry = self._run_to_node.get(run_id)
 
             if entry is not None:
-                if payload.get("terminated"):
-                    entry.state = "terminated"
-                elif entry.state != "active":
-                    entry.state = "done"
+                # The generator drained — finalize (the node stays active across
+                # per-item idles, so done is set here regardless).
+                entry.state = "terminated" if payload.get("terminated") else "done"
+
                 if payload.get("work") is not None:
                     entry.work = payload.get("work")
 
@@ -1011,7 +1011,12 @@ class UI(App):
 
         if entry.state == "active":
             frame = SPINNER[self._frame % len(SPINNER)]
-            label = f"[bold]{name}[/] [#3b82f6]{frame}[/]"
+            # Show the work time (if known) and the spinner together, so a lane
+            # that flips active/idle per item doesn't blink between the two.
+            secs = (
+                f" [bright_black]{entry.work:.2f}s[/]" if entry.work is not None else ""
+            )
+            label = f"[bold]{name}[/]{secs} [#3b82f6]{frame}[/]"
         elif entry.state == "paused":
             label = f"[bold]{name}[/] [#fbbf24]⏸[/]"
         elif entry.state == "done":

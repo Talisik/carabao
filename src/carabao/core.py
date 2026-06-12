@@ -198,18 +198,38 @@ class Core:
             async def _drain():
                 collected = []
 
-                async for result in AsyncLane.start(
-                    name,
-                    print_lanes=print_lanes,
-                    processes=processes,
-                ):
-                    collected.append(result)
+                try:
+                    async for result in AsyncLane.start(
+                        name,
+                        print_lanes=print_lanes,
+                        processes=processes,
+                    ):
+                        collected.append(result)
 
-                return collected
+                    return collected
+                finally:
+                    # Async clients must close inside the loop (their close is a
+                    # coroutine, and the loop is gone once asyncio.run returns).
+                    await Core.__aclose_clients()
 
             results.extend(asyncio.run(_drain()))
 
         return results
+
+    @staticmethod
+    async def __aclose_clients():
+        """Awaitable cleanup of async DB hubs, run inside the event loop."""
+        for hub_name in ("amongo", "aredis"):
+            try:
+                from . import constants
+
+                hub = getattr(constants, hub_name, None)
+
+                if hub is not None:
+                    await hub.aclose_all()
+
+            except Exception:
+                pass
 
     @classmethod
     def __start(cls):

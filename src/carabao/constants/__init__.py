@@ -33,3 +33,19 @@ try:
 
 except Exception:
     pass
+
+try:
+    from .async_mongo import AsyncMongoHubMeta, amongo
+
+    __all__ += ["AsyncMongoHubMeta", "amongo"]
+
+except Exception:
+    pass
+
+try:
+    from .async_redis import AsyncRedisHubMeta, aredis
+
+    __all__ += ["AsyncRedisHubMeta", "aredis"]
+
+except Exception:
+    pass
