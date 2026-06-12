@@ -1,10 +1,43 @@
 """Small rendering helpers for the dev-mode lane UI (see ``ui.py``)."""
 
 import json
+import os
+import re
+import sys
 
 from rich.text import Text
 
 from .constants import MD_RE, MD_STYLE
+
+_TB_FRAME_RE = re.compile(r'File "(?P<path>[^"]+)", line (?P<line>\d+), in (?P<func>\S+)')
+
+
+def _module_for_path(path: str):
+    target = os.path.abspath(path)
+
+    for module in list(sys.modules.values()):
+        file = getattr(module, "__file__", None)
+        if file and os.path.abspath(file) == target:
+            return module.__name__
+
+    return None
+
+
+def source_from_traceback(message: str):
+    """Origin of the deepest frame in a traceback → 'module:func:line'.
+
+    Lets an error log point at where the exception was *raised* rather than
+    where it was logged. Returns None if the message has no traceback frames.
+    """
+    frames = _TB_FRAME_RE.findall(message)
+
+    if not frames:
+        return None
+
+    path, line, func = frames[-1]
+    module = _module_for_path(path) or os.path.splitext(os.path.basename(path))[0]
+
+    return f"{module}:{func}:{line}"
 
 
 def fmt_bytes(n: int) -> str:

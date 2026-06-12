@@ -54,6 +54,7 @@ from .utils import (
     format_value,
     highlight_traceback,
     inline_markdown,
+    source_from_traceback,
 )
 
 try:
@@ -684,6 +685,11 @@ class UI(App):
         # thread, so the frames are the real caller).
         if source is None:
             source = self._origin_from_stack()
+
+        # For a logged traceback, point src at where the error was *raised*
+        # (deepest frame) rather than where it was logged.
+        if TRACEBACK_MARKER in message:
+            source = source_from_traceback(message) or source
 
         try:
             self.call_from_thread(self._add_log, level, message, source)
