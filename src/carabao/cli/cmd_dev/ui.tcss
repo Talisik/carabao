@@ -32,7 +32,7 @@ Tree { background: transparent; }
 
 /* Bottom bar: hotkeys (left) … mode + timer (right). */
 #bottombar { dock: bottom; height: 1; margin-top: 1; background: transparent; }
-#hotkeys { width: auto; color: $text-muted; }
+#hotkeys { width: auto; color: $text-muted; margin-left: 1; }
 #bottombar-spacer { width: 1fr; }
 #mode { width: auto; margin-right: 2; }
-#status { width: auto; color: $text-muted; }
+#status { width: auto; color: $text-muted; margin-right: 1; }
