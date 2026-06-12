@@ -177,7 +177,7 @@ class UI(App):
         self._active: set = set()
         # run_ids currently parked at a breakpoint (dev-only).
         self._paused: set = set()
-        # Latest value handed downstream (meta, body), for the Values tab.
+        # Latest value handed downstream (meta, body), for the Value tab.
         self._latest_value: Optional[Tuple[str, str]] = None
         self._records: List[Tuple[datetime, str, str]] = []
         # Level filter checkboxes are created on first sighting of each level
@@ -222,6 +222,9 @@ class UI(App):
                     tree: Tree = Tree("Lanes", id="tree")
                     tree.root.expand()
                     tree.root.allow_expand = False
+                    # Hide the root — it's redundant with the tab name; primary
+                    # lanes render at the top level instead.
+                    tree.show_root = False
                     self._tree = tree
                     yield tree
 
@@ -237,13 +240,13 @@ class UI(App):
                         )
                         yield self._env_table
 
-                with TabPane("Values", id="tab-values"):
-                    with VerticalScroll(id="values"):
-                        self._values_static = Static(
-                            id="values-content",
+                with TabPane("Value", id="tab-value"):
+                    with VerticalScroll(id="value"):
+                        self._value_static = Static(
+                            id="value-content",
                             markup=False,
                         )
-                        yield self._values_static
+                        yield self._value_static
 
             with Vertical(id="logs"):
                 # A Static inside a scroll: Static emits selection offsets (so
@@ -297,7 +300,6 @@ class UI(App):
             return
 
         header = Text()
-        header.append("env file: ", style="bright_black")
         header.append(", ".join(files) if files else "—", style="bold #3b82f6")
         self._env_file.update(header)
 
@@ -315,23 +317,23 @@ class UI(App):
         self._env_table.update(table)
 
     def _record_value(self, name, value):
-        # Only the latest value flowing through the pipeline (Values tab).
+        # Only the latest value flowing through the pipeline (Value tab).
         self._latest_value = format_value(value)
-        self._render_values()
+        self._render_value()
 
-    def _render_values(self):
+    def _render_value(self):
         if self._latest_value is None:
-            self._values_static.update(Text(""))
+            self._value_static.update(Text(""))
             return
 
         meta, body = self._latest_value
         out = Text()
-        out.append(f"{meta}\n", style="bright_black")
+        out.append(f"{meta}\n\n", style="bright_black")
         body_text = Text(body)
         if body[:1] in "{[":  # highlight JSON payloads
             JSON_HL.highlight(body_text)
         out.append(body_text)
-        self._values_static.update(out)
+        self._value_static.update(out)
 
     def on_mount(self):
         self.title = self._run_title
