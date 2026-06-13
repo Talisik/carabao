@@ -40,6 +40,7 @@ A Python library for building robust publisher-subscriber (pub/sub) frameworks w
 -   Clean shutdown with exit handlers
 -   Command-line interface for management, including interactive selection
 -   Support for multiple database connections (MongoDB, Redis, Elasticsearch, PostgreSQL)
+-   Async database hubs for async lanes — `amongo` (pymongo `AsyncMongoClient`) and `aredis` (`redis.asyncio`)
 -   Development and production mode support
 -   Test mode for safe testing in production environments
 
@@ -65,8 +66,8 @@ installed separately — e.g. `pip install "fun-things[mongo,redis]" psycopg2-bi
 
 ## Requirements
 
-Core: `async-timeout`, `dnspython`, `fun-things`, `lazy-main`, `python-dotenv`,
-`typing-extensions`, `typer`, `lane2lane`.
+Core: `fun-things`, `lazy-main`, `python-dotenv`, `typing-extensions`, `typer`,
+`lane2lane`.
 
 `standard` extra (interactive UI): `textual`, `textual-slider`.
 
@@ -292,8 +293,13 @@ Requires the `standard` extra (`pip install "carabao[standard]"`).
 
 The **left panel** has tabs (cycle with **`q`** / **`e`**):
 
--   **Lanes** — the full pipeline laid out from the `lanes` field up front; each
-    lane spins while active and shows its true work time when done.
+-   **Lanes** — the full pipeline drawn as a selectable/copyable ASCII tree from
+    the `lanes` field up front. Each node is dim while pending, then colors as it
+    runs and finishes — green (running) → bright green (done) for active lanes,
+    blue → bright blue for passive lanes, **bright red** on error; it spins while
+    active, shows its true work time, and a `×N` badge once it has run more than
+    once. Root lanes are ordered by who started first (so passive watchers float
+    to the top).
 -   **Env** — the loaded `.env` file(s) and the env vars actually read.
 -   **Value** — the latest value flowing between lanes (type · count · bytes),
     as pretty JSON.
@@ -305,7 +311,10 @@ stdlib `logging` module (including non-propagating loggers):
     `Ctrl+C` to copy)
 -   syntax-highlighted JSON, colored tracebacks, and inline markdown
     (`**bold**`, `` `code` ``, `*italic*`, `~~strike~~`)
--   optional `module:func:line` origin per line
+-   multi-line bodies (JSON, tracebacks) indent under the message column so the
+    pane reads like a table
+-   optional toggles for the `module:func:line` origin and the **lane** that
+    emitted each line; the lane column auto-sizes to the lanes on the page
 
 ![The log pane](https://raw.githubusercontent.com/Talisik/carabao/main/previews/logs.jpg)
 
