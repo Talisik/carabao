@@ -5,6 +5,9 @@ Screen { background: transparent; }
 #left Tabs { background: transparent; }
 #left ContentSwitcher, #left TabPane { background: transparent; padding: 0; }
 #tree { background: transparent; }
+/* width: auto -> Static sizes to its longest line (no wrap); the container
+   crops anything wider than the pane. */
+#tree-static { width: auto; height: auto; background: transparent; padding: 0 1; }
 #env { background: transparent; }
 #env-file { width: 1fr; height: auto; background: transparent; padding: 0 1; margin-bottom: 1; }
 #env-table { width: 1fr; height: auto; background: transparent; padding: 0 1; }
@@ -19,15 +22,6 @@ Screen { background: transparent; }
 #pager-right { width: auto; color: $text-muted; }
 #log { height: 1fr; background: transparent; }
 #log-content { width: 1fr; height: auto; background: transparent; }
-Tree { background: transparent; }
-
-/* Live tree: guides always visible, no hover/cursor line highlight. */
-#tree > .tree--guides,
-#tree > .tree--guides-hover,
-#tree > .tree--guides-selected { color: $accent; text-style: none; }
-#tree > .tree--cursor,
-#tree > .tree--highlight,
-#tree > .tree--highlight-line { background: transparent; text-style: none; }
 
 /* Bottom bar: hotkeys (left) … mode + timer (right). */
 #bottombar { dock: bottom; height: 1; margin-top: 1; background: transparent; }

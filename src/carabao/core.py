@@ -148,17 +148,25 @@ class Core:
         ]
 
     @staticmethod
-    def __has_primary(root, name: str) -> bool:
-        """Whether the registry has a matching ACTIVE primary lane for ``name``.
+    def __has_active_primary(root, name: str) -> bool:
+        """Whether the registry has a matching ACTIVE (non-passive) primary.
 
-        Mirrors ``start``'s own guard: passive lanes (e.g. the always-on
-        watchers, whose condition matches every name) don't count — otherwise a
-        purely-async queue would falsely look like it has sync lanes, and
-        ``Lane.start`` would then raise 'No lanes found'.
+        Used to decide if the queue name is valid — passive lanes (always-on
+        watchers, condition matches every name) don't count, else a typo'd queue
+        would silently "match" a watcher.
         """
 
         return any(
             lane.primary() and not lane.passive() and lane.condition(name)
+            for lane in root.available_lanes()
+        )
+
+    @staticmethod
+    def __has_any_primary(root, name: str) -> bool:
+        """Whether the registry has any matching primary — active or passive."""
+
+        return any(
+            lane.primary() and lane.condition(name)
             for lane in root.available_lanes()
         )
 
@@ -176,11 +184,18 @@ class Core:
         lanes in either registry (or both).
         """
 
-        has_sync = Core.__has_primary(Lane, name)
-        has_async = Core.__has_primary(AsyncLane, name)
-
-        if not has_sync and not has_async:
+        # A queue is valid if an ACTIVE primary matches in either registry.
+        if not (
+            Core.__has_active_primary(Lane, name)
+            or Core.__has_active_primary(AsyncLane, name)
+        ):
             raise ValueError(f"No lanes found for '{name}'!")
+
+        # Run whichever registry has ANY match (active or passive) so passive
+        # lanes (e.g. watchers) still run even when the active work is in the
+        # other registry. require_active=False — validity already checked above.
+        has_sync = Core.__has_any_primary(Lane, name)
+        has_async = Core.__has_any_primary(AsyncLane, name)
 
         results = []
 
@@ -190,6 +205,7 @@ class Core:
                     name,
                     print_lanes=print_lanes,
                     processes=processes,
+                    require_active=False,
                 )
             )
 
@@ -203,6 +219,7 @@ class Core:
                         name,
                         print_lanes=print_lanes,
                         processes=processes,
+                        require_active=False,
                     ):
                         collected.append(result)
 

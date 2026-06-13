@@ -15,17 +15,22 @@ import threading
 from collections import deque
 from datetime import datetime
 from time import monotonic
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, ClassVar, Dict, List, Optional, Tuple
 
 from l2l import events, logger
 from rich.text import Text
 from textual import on
 from textual.app import App
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
+from textual.containers import (
+    Horizontal,
+    ScrollableContainer,
+    Vertical,
+    VerticalScroll,
+)
 from textual.geometry import Offset
-from textual.selection import Selection
-from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
+from textual.selection import Selection
 from textual.widgets import (
     Button,
     Input,
@@ -33,18 +38,22 @@ from textual.widgets import (
     Static,
     TabbedContent,
     TabPane,
-    Tree,
 )
-from textual.widgets.tree import TreeNode
 
 from .constants import (
     HOTKEYS_DONE,
     HOTKEYS_PAUSED,
     HOTKEYS_RUNNING,
     JSON_HL,
+    LANE_COL_MAX,
     LEVEL_COLOR,
     LEVELS_OFF_BY_DEFAULT,
     MAX_LINES,
+    NODE_DONE,
+    NODE_ERROR,
+    NODE_PASSIVE_DONE,
+    NODE_PASSIVE_RUNNING,
+    NODE_RUNNING,
     PAGE_SIZE,
     SPINNER,
 )
@@ -61,6 +70,7 @@ from .utils import (
 
 try:
     import psutil
+
 except ImportError:
     psutil = None
 
@@ -148,9 +158,7 @@ class _LogStatic(Static):
         else:
             start, end = 0, len(line)
 
-        self.screen.selections = {
-            self: Selection(Offset(start, row), Offset(end, row))
-        }
+        self.screen.selections = {self: Selection(Offset(start, row), Offset(end, row))}
 
     @staticmethod
     def _word_bounds(line: str, col: int):
@@ -197,7 +205,7 @@ class _ConfirmQuit(ModalScreen[bool]):
     #confirm-no:hover { background: #5a9bf8; }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar[List[BindingType]] = [
         Binding("escape", "cancel", "Cancel"),
         Binding("y", "confirm", "Quit"),
         Binding("n", "cancel", "Cancel"),
@@ -232,32 +240,45 @@ _DISPLAY_TOGGLES = [
     ("time", "time", "t", "_show_time"),
     ("lvl", "level", "l", "_show_level"),
     ("src", "src", "s", "_show_source"),
+    ("lane", "lane", "n", "_show_lane"),
     ("rich", "rich", "r", "_show_rich"),
     ("scroll", "scroll", "o", "_autoscroll"),
 ]
 
 
 class _NodeState:
-    __slots__ = ("node", "name", "state", "work")
+    __slots__ = ("name", "state", "work", "passive", "error", "children", "order")
 
-    def __init__(self, node: TreeNode, name: str):
-        self.node = node
+    def __init__(self, name: str, passive: bool = False):
         self.name = name
         self.state = "pending"
         self.work: Optional[float] = None
+        self.passive = passive
+        self.error = False
+        #: Ordered child nodes, for rendering the ASCII tree.
+        self.children: list = []
+        #: Sequence in which this node first ran (None until it does). Roots are
+        #: sorted by it so they appear in start order — passive watchers (which
+        #: run first) float to the top.
+        self.order: Optional[int] = None
 
 
 class _LogRecord:
     """One captured log line; ``text`` caches its rendered Text (rendered once)."""
 
-    __slots__ = ("ts", "level", "message", "source", "text")
+    __slots__ = ("ts", "level", "message", "source", "lane", "text", "lane_w")
 
-    def __init__(self, ts: datetime, level: str, message: str, source):
+    def __init__(self, ts: datetime, level: str, message: str, source, lane=None):
         self.ts = ts
         self.level = level
         self.message = message
         self.source = source
+        self.lane = lane
         self.text: Optional[Text] = None
+        #: Lane-column width the cached `text` was rendered at (-1 = none yet).
+        #: The column adapts to the lanes on the current page, so a change here
+        #: re-renders the line.
+        self.lane_w = -1
 
 
 class UI(App):
@@ -269,7 +290,7 @@ class UI(App):
     # f / c / / hotkeys. `/` focuses search when the user wants it.
     AUTO_FOCUS = None
 
-    BINDINGS = [
+    BINDINGS: ClassVar[List[BindingType]] = [
         Binding("escape", "request_quit", "Quit", priority=True),
         Binding("slash", "focus_search", "Search"),
         Binding("f", "filter_bar('levels')", "Levels"),
@@ -282,14 +303,16 @@ class UI(App):
         Binding("right,right_square_bracket", "page(1)", "Newer logs"),
         Binding("up", "scroll_logs(-1)", "Scroll up"),
         Binding("down", "scroll_logs(1)", "Scroll down"),
-    ] + [
         # Number keys toggle the n-th level in the levels strip.
-        Binding(str(digit), f"bar_item({digit})", show=False)
-        for digit in range(1, 10)
-    ] + [
+        *(
+            Binding(str(digit), f"bar_item({digit})", show=False)
+            for digit in range(1, 10)
+        ),
         # Letter keys toggle display options — globally, not just in the strip.
-        Binding(hotkey, f"toggle_display('{option}')", show=False)
-        for _label, option, hotkey, _attr in _DISPLAY_TOGGLES
+        *(
+            Binding(hotkey, f"toggle_display('{option}')", show=False)
+            for _label, option, hotkey, _attr in _DISPLAY_TOGGLES
+        ),
     ]
 
     def __init__(
@@ -314,8 +337,16 @@ class UI(App):
         # Tree state. _NodeState entries; structural nodes are pre-built from the
         # lanes field, then matched to running lanes by (parent, name).
         self._run_to_node: Dict[int, _NodeState] = {}
+        # Ordered top-level nodes (primaries + passive/runtime roots), walked to
+        # render the ASCII tree.
+        self._roots: list = []
+        # Hands out a start-order rank the first time each node runs.
+        self._order_counter = 0
         self._struct_roots: Dict[str, _NodeState] = {}
         self._struct_children: Dict[int, Dict[str, _NodeState]] = {}
+        # name -> [entries], for matching lanes whose parent hasn't been claimed
+        # yet (e.g. before-lanes fire their event before the primary's own).
+        self._struct_by_name: Dict[str, list] = {}
         self._claimed: set = set()
         self._active: set = set()
         # run_ids currently parked at a breakpoint (dev-only).
@@ -333,8 +364,12 @@ class UI(App):
         # CARABAO_LOG_PAGE_SIZE), falling back to the constants.
         from carabao.constants import C
 
-        self._max_lines = max(1, C("CARABAO_LOG_MAX_LINES", cast=int, default=MAX_LINES))
-        self._page_size = max(1, C("CARABAO_LOG_PAGE_SIZE", cast=int, default=PAGE_SIZE))
+        self._max_lines = max(
+            1, C("CARABAO_LOG_MAX_LINES", cast=int, default=MAX_LINES)
+        )
+        self._page_size = max(
+            1, C("CARABAO_LOG_PAGE_SIZE", cast=int, default=PAGE_SIZE)
+        )
         # Worker pushes log lines here (non-blocking); the flush timer drains
         # them onto _records and re-renders at ~10 fps.
         self._pending: deque = deque()
@@ -356,6 +391,7 @@ class UI(App):
         self._autoscroll = True
         self._show_panel = True
         self._show_source = False  # log call site (module:func:line)
+        self._show_lane = False  # which lane emitted the log
         self._finished = False
         # Bottom-bar mode: "normal" hotkeys, or "levels"/"display" filter strips.
         self._bar_mode = "normal"
@@ -380,19 +416,13 @@ class UI(App):
 
             with self._left:
                 with TabPane("Lanes", id="tab-lanes"):
-                    tree: Tree = Tree("Lanes", id="tree")
+                    # A plain-text ASCII tree in a Static (not Textual's Tree
+                    # widget) so the whole structure is selectable/copyable, like
+                    # the log and env panes.
+                    with ScrollableContainer(id="tree"):
+                        self._tree_static = Static(id="tree-static")
 
-                    tree.root.expand()
-
-                    tree.root.allow_expand = False
-                    # Hide the root — it's redundant with the tab name; primary
-                    # lanes render at the top level instead.
-                    tree.show_root = False
-                    # Tighter indentation (default 4) — keeps deep trees narrower.
-                    tree.guide_depth = 2
-                    self._tree = tree
-
-                    yield tree
+                        yield self._tree_static
 
                 with TabPane("Env", id="tab-env"):
                     with VerticalScroll(id="env"):
@@ -597,6 +627,9 @@ class UI(App):
 
     def _sample_stats(self):
         if self._proc is None:
+            return
+
+        if psutil is None:
             return
 
         try:
@@ -848,10 +881,13 @@ class UI(App):
         if self._log_fp is not None:
             self._write_log_file(level, message, source)
 
+        # The lane whose process() is on the stack right now owns this log.
+        lane = self._lane_from_stack()
+
         # Non-blocking hand-off: queue for the UI's flush timer. deque.append is
         # thread-safe, and (unlike call_from_thread) never blocks the worker —
         # so a flood of logs can't serialize the pipeline against the UI thread.
-        self._pending.append((datetime.now(), level, message, source))
+        self._pending.append((datetime.now(), level, message, source, lane))
 
     def _write_log_file(self, level: str, message: str, source: Optional[str]):
         # Stream a plain-text (ANSI-stripped) line to the log file.
@@ -861,10 +897,37 @@ class UI(App):
 
         try:
             with self._log_lock:
+                if self._log_fp is None:
+                    return
+
                 self._log_fp.write(line)
                 self._log_fp.flush()
+
         except Exception:
             pass
+
+    def _lane_from_stack(self) -> Optional[str]:
+        """Name of the innermost lane whose process() is on the stack right now.
+
+        The log was emitted from inside that lane's execution (including lazy
+        generator iteration, whose frame is live while a downstream lane pulls),
+        so its frame's ``self`` is the owning lane.
+        """
+
+        frame = sys._getframe()
+
+        while frame is not None:
+            obj = frame.f_locals.get("self")
+
+            if obj is not None and hasattr(obj, "_uid") and hasattr(obj, "first_name"):
+                try:
+                    return obj.first_name()
+                except Exception:
+                    return None
+
+            frame = frame.f_back
+
+        return None
 
     def _origin_from_stack(self) -> Optional[str]:
         """First caller frame outside the logging plumbing → 'module:func:line'."""
@@ -889,28 +952,37 @@ class UI(App):
         # whole plan shows up front; running lanes then highlight their node.
         for lane_cls in self._structure_lanes:
             try:
-                self._add_struct_node(
-                    lane_cls, self._tree.root, self._struct_roots, set()
-                )
+                self._add_struct_node(lane_cls, None, self._struct_roots, set())
             except Exception:
                 pass
 
-    def _add_struct_node(self, lane_cls, parent_node, siblings, seen):
+        self._render_tree()
+
+    def _add_struct_node(self, lane_cls, parent_entry, siblings, seen):
         if lane_cls in seen:  # guard against cyclic lane references
             return
 
         seen = seen | {lane_cls}
 
         name = lane_cls.first_name()
-        node = parent_node.add(name, expand=True, allow_expand=False)
-        entry = _NodeState(node, name)
+
+        try:
+            passive = lane_cls.passive()
+        except Exception:
+            passive = False
+
+        entry = _NodeState(name, passive=passive)
+
+        if parent_entry is None:
+            self._roots.append(entry)
+        else:
+            parent_entry.children.append(entry)
 
         siblings.setdefault(name, entry)
+        self._struct_by_name.setdefault(name, []).append(entry)
 
         children: Dict[str, _NodeState] = {}
         self._struct_children[id(entry)] = children
-
-        self._render_node(entry)
 
         lanes = lane_cls.get_lanes()
 
@@ -926,8 +998,28 @@ class UI(App):
                 resolved = None
 
             if isinstance(resolved, type):
-                self._add_struct_node(resolved, node, children, seen)
+                self._add_struct_node(resolved, entry, children, seen)
             # Mock/dict (anonymous groups) are matched lazily at runtime instead.
+
+    def _is_passive(self, name: str) -> bool:
+        """Whether a runtime lane name belongs to a passive lane (colored blue).
+
+        Used for nodes not in the pre-built structure (passive watchers run on
+        every queue, so they aren't part of the selected lane's plan).
+        """
+
+        from l2l import AsyncLane, Lane
+
+        for registry in (Lane, AsyncLane):
+            try:
+                lane = registry.get_lane(name)
+
+                if lane is not None:
+                    return lane.passive()
+            except Exception:
+                pass
+
+        return False
 
     def _node_for(self, run_id, name, parent_id) -> _NodeState:
         entry = self._run_to_node.get(run_id)
@@ -942,6 +1034,16 @@ class UI(App):
 
         match = siblings.get(name) if siblings else None
 
+        # Parent referenced but not yet claimed — e.g. before-lanes (negative
+        # priority) emit their event before the primary's own, so the primary's
+        # node isn't in _run_to_node yet. Match the pre-built node by name
+        # anywhere in the structure instead of orphaning it to a root duplicate.
+        if match is None and parent_id and parent is None:
+            for cand in self._struct_by_name.get(name, ()):
+                if id(cand) not in self._claimed:
+                    match = cand
+                    break
+
         if match is not None and id(match) not in self._claimed:
             self._claimed.add(id(match))
 
@@ -950,11 +1052,14 @@ class UI(App):
             return match
 
         # Not in the pre-built structure (goto/Mock/duplicate, or no lane passed)
-        # — attach under the matched parent (or root).
-        parent_node = parent.node if parent else self._tree.root
-        node = parent_node.add(name, expand=True, allow_expand=False)
-        entry = _NodeState(node, name)
+        # — attach under the matched parent (or as a new root).
+        entry = _NodeState(name, passive=self._is_passive(name))
         self._struct_children[id(entry)] = {}
+
+        if parent is not None:
+            parent.children.append(entry)
+        else:
+            self._roots.append(entry)
 
         if siblings is not None:
             siblings[f"{name}\x00{run_id}"] = entry
@@ -977,6 +1082,7 @@ class UI(App):
             )
             entry.state = "active"
 
+            self._stamp_order(entry)
             self._active.add(run_id)
             self._render_node(entry)
 
@@ -1000,6 +1106,9 @@ class UI(App):
                 # per-item idles, so done is set here regardless).
                 entry.state = "terminated" if payload.get("terminated") else "done"
 
+                if payload.get("errors"):
+                    entry.error = True
+
                 if payload.get("work") is not None:
                     entry.work = payload.get("work")
 
@@ -1021,6 +1130,7 @@ class UI(App):
             )
             entry.state = "paused"
 
+            self._stamp_order(entry)
             self._active.discard(run_id)
 
             # Freeze the timer at the first concurrent pause.
@@ -1050,42 +1160,96 @@ class UI(App):
 
             self._sync_hotkeys()
 
-    def _render_node(self, entry: _NodeState):
-        name = entry.name
+    def _node_markup(self, entry: _NodeState) -> str:
+        """Console markup for a single node's label (name + state + timing)."""
 
+        name = entry.name
+        secs = f" [bright_black]{entry.work:.2f}s[/]" if entry.work is not None else ""
+
+        # Color by state: dim pending -> running -> done. Passive lanes
+        # (always-on watchers) use blues; active lanes use greens; anything
+        # that errored or was terminated turns bright red.
         if entry.state == "active":
             frame = SPINNER[self._frame % len(SPINNER)]
             # Show the work time (if known) and the spinner together, so a lane
             # that flips active/idle per item doesn't blink between the two.
-            secs = (
-                f" [bright_black]{entry.work:.2f}s[/]" if entry.work is not None else ""
-            )
-            label = f"[bold]{name}[/]{secs} [#3b82f6]{frame}[/]"
+            color = NODE_PASSIVE_RUNNING if entry.passive else NODE_RUNNING
+            return f"[{color}]{name}[/]{secs} [{color}]{frame}[/]"
         elif entry.state == "paused":
-            label = f"[bold]{name}[/] [#fbbf24]⏸[/]"
+            return f"[{NODE_RUNNING}]{name}[/] [#fbbf24]⏸[/]"
+        elif entry.state == "terminated" or entry.error:
+            # Bright red, no marker — the color alone signals the failure.
+            return f"[{NODE_ERROR}]{name}[/]{secs}"
         elif entry.state == "done":
-            secs = (
-                f" [bright_black]{entry.work:.2f}s[/]" if entry.work is not None else ""
-            )
-            label = f"{name}{secs}"
-        elif entry.state == "terminated":
-            label = f"[red]✕[/] {name}"
-        else:  # pending — dim, no leading marker
-            label = f"[bright_black]{name}[/]"
+            color = NODE_PASSIVE_DONE if entry.passive else NODE_DONE
+            return f"[{color}]{name}[/]{secs}"
 
-        entry.node.set_label(label)
+        return f"[bright_black]{name}[/]"  # pending — dim, no leading marker
+
+    def _stamp_order(self, entry: _NodeState):
+        """Record the order a node first ran, so roots sort by start order."""
+
+        if entry.order is None:
+            self._order_counter += 1
+            entry.order = self._order_counter
+
+    def _render_tree(self):
+        """Redraw the whole ASCII lane tree into the Static.
+
+        Connectors (├ └ │) are drawn dim; each line ends with the node's
+        colored label. Rendering everything at once keeps the text selectable
+        and copyable (Textual's Tree widget is not). The Text is no-wrap so long
+        lane names are cropped at the pane edge instead of wrapping.
+        """
+
+        if not hasattr(self, "_tree_static"):
+            return
+
+        lines: list = []
+
+        def walk(entry: _NodeState, prefix: str, is_last: bool):
+            connector = "└ " if is_last else "├ "
+            lines.append(
+                f"[bright_black]{prefix}{connector}[/]" + self._node_markup(entry)
+            )
+
+            child_prefix = prefix + ("  " if is_last else "│ ")
+            kids = entry.children
+
+            for i, kid in enumerate(kids):
+                walk(kid, child_prefix, i == len(kids) - 1)
+
+        # Roots in start order (those that have run first; never-run pre-built
+        # roots keep their structural order at the bottom).
+        roots = sorted(
+            self._roots,
+            key=lambda r: r.order if r.order is not None else float("inf"),
+        )
+
+        # Top-level primaries render flush-left (no connector); their sub-lanes
+        # nest beneath with connectors.
+        for root in roots:
+            lines.append(self._node_markup(root))
+
+            for i, kid in enumerate(root.children):
+                walk(kid, "", i == len(root.children) - 1)
+
+        text = Text.from_markup("\n".join(lines))
+        text.no_wrap = True
+        text.overflow = "crop"
+
+        self._tree_static.update(text)
+
+    def _render_node(self, entry: Optional[_NodeState] = None):
+        # The tree is one Static, so any node change redraws the whole thing.
+        self._render_tree()
 
     def _tick_spinner(self):
         if not self._active:
             return
 
         self._frame += 1
-
-        for run_id in list(self._active):
-            entry = self._run_to_node.get(run_id)
-
-            if entry is not None:
-                self._render_node(entry)
+        self._render_tree()
 
     def _flush_log(self):
         # Drain everything the worker queued since the last tick, then render
@@ -1098,7 +1262,7 @@ class UI(App):
 
         while self._pending:
             try:
-                ts, level, message, source = self._pending.popleft()
+                ts, level, message, source, lane = self._pending.popleft()
             except IndexError:
                 break
 
@@ -1109,7 +1273,7 @@ class UI(App):
             if first_sighting and level not in LEVELS_OFF_BY_DEFAULT:
                 self._enabled_levels.add(level)
 
-            self._records.append(_LogRecord(ts, level, message, source))
+            self._records.append(_LogRecord(ts, level, message, source, lane))
             added = True
 
         if len(self._records) > self._max_lines:
@@ -1132,16 +1296,19 @@ class UI(App):
 
         return True
 
-    def _render_record(self, record: "_LogRecord") -> Text:
-        # Cache: render each line once; reuse until invalidated.
-        if record.text is not None:
+    def _render_record(self, record: "_LogRecord", lane_w: int = 0) -> Text:
+        # Cache: render each line once; reuse until invalidated or the lane
+        # column width (adaptive per page) changes.
+        if record.text is not None and record.lane_w == lane_w:
             return record.text
 
         parts: List[Text] = []
 
         if self._show_time:
             parts.append(
-                Text(record.ts.strftime("%Y-%m-%d %H:%M:%S") + " ", style="bright_black")
+                Text(
+                    record.ts.strftime("%Y-%m-%d %H:%M:%S") + " ", style="bright_black"
+                )
             )
 
         if self._show_level:
@@ -1152,15 +1319,35 @@ class UI(App):
         if self._show_source:
             parts.append(Text(f"{record.source or '—'}  ", style="bright_black"))
 
+        if self._show_lane:
+            lane = (record.lane or "—").ljust(lane_w)
+            parts.append(Text(f"{lane}  ", style="#3b82f6"))
+
         body = (
             self._render_body(record.message)
             if self._show_rich
             else Text.from_ansi(record.message)
         )
 
+        # Indent a multi-line body (JSON, traceback) to the message column, so
+        # the block lines up under the first line instead of starting at col 0.
+        prefix_len = sum(len(part.plain) for part in parts)
+
+        if prefix_len and "\n" in body.plain:
+            pad = " " * prefix_len
+            lines = body.split("\n")
+            body = Text()
+
+            for i, line in enumerate(lines):
+                if i:
+                    body.append("\n" + pad)
+
+                body.append_text(line)
+
         parts.append(body)
 
         record.text = Text.assemble(*parts)
+        record.lane_w = lane_w
 
         return record.text
 
@@ -1215,7 +1402,18 @@ class UI(App):
         start = max(0, end - size)
         page_records = visible[start:end]
 
-        lines = [self._render_record(record) for record in page_records]
+        # Lane column adapts to the lanes on THIS page (capped), so short-named
+        # pages stay tight and only long-named pages widen.
+        lane_w = (
+            min(
+                LANE_COL_MAX,
+                max((len(r.lane) for r in page_records if r.lane), default=0),
+            )
+            if self._show_lane
+            else 0
+        )
+
+        lines = [self._render_record(record, lane_w) for record in page_records]
         content = Text("\n").join(lines) if lines else Text("")
 
         # Keep the plain text for word/line selection boundary lookups.
@@ -1283,9 +1481,11 @@ class UI(App):
             self._left.display = value
         elif option == "src":
             self._show_source = value
+        elif option == "lane":
+            self._show_lane = value
 
         # These change how each line renders → drop the per-line cache.
-        if option in ("time", "level", "src", "rich"):
+        if option in ("time", "level", "src", "lane", "rich"):
             self._invalidate_renders()
 
         self._render_log()

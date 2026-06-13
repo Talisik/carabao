@@ -42,6 +42,19 @@ LEVELS_OFF_BY_DEFAULT = {"TRACE"}
 #: Spinner frames for active lanes.
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
+#: Lane-tree node colors. Pending nodes are dim; running -> done brightens.
+#: Active lanes use greens, passive lanes (always-on watchers) use blues, and
+#: anything that errored or terminated turns bright red.
+NODE_RUNNING = "#3fb950"  # active lane, running
+NODE_DONE = "#56d364"  # active lane, finished (brighter green)
+NODE_PASSIVE_RUNNING = "#3b82f6"  # passive lane, running
+NODE_PASSIVE_DONE = "#79c0ff"  # passive lane, finished (brighter blue)
+NODE_ERROR = "#ff5555"  # errored or terminated (bright red)
+
+#: Max width the log's lane column pads to. Names longer than this overflow
+#: (their message won't align) rather than forcing a huge gap on every line.
+LANE_COL_MAX = 22
+
 #: Bottom-bar hotkey hints, per pipeline state.
 HOTKEYS_RUNNING = "[b]esc[/] quit   [b]/[/] search   [b]f[/] levels   [b]d[/] display"
 # Highlight "esc quit" once the pipeline is done — the user can safely exit.
