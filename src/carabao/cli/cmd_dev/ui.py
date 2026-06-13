@@ -247,7 +247,9 @@ _DISPLAY_TOGGLES = [
 
 
 class _NodeState:
-    __slots__ = ("name", "state", "work", "passive", "error", "children", "order")
+    __slots__ = (
+        "name", "state", "work", "passive", "error", "children", "order", "runs"
+    )
 
     def __init__(self, name: str, passive: bool = False):
         self.name = name
@@ -261,6 +263,8 @@ class _NodeState:
         #: sorted by it so they appear in start order — passive watchers (which
         #: run first) float to the top.
         self.order: Optional[int] = None
+        #: How many times this lane has run (distinct run ids mapped here).
+        self.runs = 0
 
 
 class _LogRecord:
@@ -663,6 +667,15 @@ class UI(App):
         # Release anything parked at a breakpoint so the worker thread can end.
         events.disable_breakpoints()
         events.unsubscribe(self._on_event)
+
+        # If the user quit mid-run (e.g. SINGLE_RUN=False, several loops in), the
+        # daemon pipeline worker is still going. Restoring the log redirection now
+        # would let its trailing output (l2l TRACE lines, loguru, prints) leak to
+        # the terminal. Leave all capture in place — the daemon dies on process
+        # exit — and only tear down once the worker has actually finished.
+        if getattr(self, "_worker", None) is not None and self._worker.is_alive():
+            return
+
         logger.remove_sink(self._on_log)
 
         if getattr(self, "_loguru_removed", False):
@@ -1035,6 +1048,9 @@ class UI(App):
             self._struct_children.get(id(parent)) if parent else self._struct_roots
         )
 
+        # Exact match under the resolved parent. Reuse it even if already
+        # claimed — that's the same lane running again (count it via `runs`),
+        # not a different lane, so don't spawn a duplicate node.
         match = siblings.get(name) if siblings else None
 
         # Parent referenced but not yet claimed — e.g. before-lanes (negative
@@ -1047,10 +1063,11 @@ class UI(App):
                     match = cand
                     break
 
-        if match is not None and id(match) not in self._claimed:
+        if match is not None:
             self._claimed.add(id(match))
 
             self._run_to_node[run_id] = match
+            match.runs += 1
 
             return match
 
@@ -1064,10 +1081,14 @@ class UI(App):
         else:
             self._roots.append(entry)
 
+        # Register under the plain name so a re-run (same lane again, e.g. a
+        # passive watcher each loop) reuses this node and bumps its count rather
+        # than spawning a duplicate. Only reached when no structural node matched.
         if siblings is not None:
-            siblings[f"{name}\x00{run_id}"] = entry
+            siblings[name] = entry
 
         self._run_to_node[run_id] = entry
+        entry.runs += 1
 
         self._render_node(entry)
 
@@ -1168,6 +1189,8 @@ class UI(App):
 
         name = entry.name
         secs = f" [bright_black]{entry.work:.2f}s[/]" if entry.work is not None else ""
+        # Run count, only once it's run more than once (avoids ×1 noise).
+        runs = f" [bright_black]×{entry.runs}[/]" if entry.runs > 1 else ""
 
         # Color by state: dim pending -> running -> done. Passive lanes
         # (always-on watchers) use blues; active lanes use greens; anything
@@ -1177,15 +1200,15 @@ class UI(App):
             # Show the work time (if known) and the spinner together, so a lane
             # that flips active/idle per item doesn't blink between the two.
             color = NODE_PASSIVE_RUNNING if entry.passive else NODE_RUNNING
-            return f"[{color}]{name}[/]{secs} [{color}]{frame}[/]"
+            return f"[{color}]{name}[/]{secs}{runs} [{color}]{frame}[/]"
         elif entry.state == "paused":
-            return f"[{NODE_RUNNING}]{name}[/] [#fbbf24]⏸[/]"
+            return f"[{NODE_RUNNING}]{name}[/]{runs} [#fbbf24]⏸[/]"
         elif entry.state == "terminated" or entry.error:
             # Bright red, no marker — the color alone signals the failure.
-            return f"[{NODE_ERROR}]{name}[/]{secs}"
+            return f"[{NODE_ERROR}]{name}[/]{secs}{runs}"
         elif entry.state == "done":
             color = NODE_PASSIVE_DONE if entry.passive else NODE_DONE
-            return f"[{color}]{name}[/]{secs}"
+            return f"[{color}]{name}[/]{secs}{runs}"
 
         return f"[bright_black]{name}[/]"  # pending — dim, no leading marker
 
@@ -1319,12 +1342,15 @@ class UI(App):
 
             parts.append(Text(f"{record.level:<7} ", style=color))
 
-        if self._show_source:
-            parts.append(Text(f"{record.source or '—'}  ", style="bright_black"))
-
+        # Lane first (padded to a stable width) then src — src has a very
+        # variable length, so keeping it last before the body avoids it shoving
+        # the lane column around.
         if self._show_lane:
             lane = (record.lane or "—").ljust(lane_w)
             parts.append(Text(f"{lane}  ", style="#3b82f6"))
+
+        if self._show_source:
+            parts.append(Text(f"{record.source or '—'}  ", style="bright_black"))
 
         body = (
             self._render_body(record.message)
