@@ -770,7 +770,10 @@ class UI(App):
                 elif record.exc_text:
                     message = f"{message}\n{record.exc_text.rstrip()}"
 
-                source = f"{record.name}:{record.funcName}:{record.lineno}"
+                # Prefer the call-site module over the logger name — the latter
+                # can be an opaque, per-instance name (e.g. an OTLP "otlp_direct_
+                # <id>" logger), while module reflects where the log came from.
+                source = f"{record.module}:{record.funcName}:{record.lineno}"
 
                 forward(record.levelname, message, source)
             except Exception:
