@@ -3,6 +3,9 @@ Screen { background: transparent; }
 #body { height: 1fr; background: transparent; }
 #left { width: 25%; border-right: solid $accent; background: transparent; }
 #left Tabs { background: transparent; }
+/* Active tab label + the underline bar under it use the accent. */
+#left Tab.-active { color: $accent; text-style: bold; }
+#left Underline > .underline--bar { color: $accent; }
 #left ContentSwitcher, #left TabPane { background: transparent; padding: 0; }
 #tree { background: transparent; }
 /* width: auto -> Static sizes to its longest line (no wrap); the container
@@ -21,6 +24,9 @@ Screen { background: transparent; }
 #pager-spacer { width: 1fr; }
 #pager-right { width: auto; color: $text-muted; }
 #log { height: 1fr; background: transparent; }
+
+/* Scrollbars everywhere follow the accent (state-tinted below). */
+* { scrollbar-color: $accent; scrollbar-color-active: $accent; scrollbar-color-hover: $accent; }
 #log-content { width: 1fr; height: auto; background: transparent; }
 
 /* Bottom bar: hotkeys (left) … mode + timer (right). One row when it fits;
@@ -32,6 +38,27 @@ Screen { background: transparent; }
 #stats { width: auto; color: $text-muted; margin-right: 2; }
 #mode { width: auto; margin-right: 2; }
 #status { width: auto; color: $text-muted; margin-right: 1; }
+
+/* Theme accent tracks pipeline state (class set on the Screen by ui.py):
+   paused -> orange, errored/failed -> red, cleanly done -> green. Default
+   (running) keeps the blue $accent above. */
+.state-paused #left { border-right: solid #fbbf24; }
+.state-paused #search { border: round #fbbf24; }
+.state-paused #left Tab.-active { color: #fbbf24; }
+.state-paused #left Underline > .underline--bar { color: #fbbf24; }
+.state-paused * { scrollbar-color: #fbbf24; scrollbar-color-active: #fbbf24; scrollbar-color-hover: #fbbf24; }
+
+.state-error #left { border-right: solid #ff5555; }
+.state-error #search { border: round #ff5555; }
+.state-error #left Tab.-active { color: #ff5555; }
+.state-error #left Underline > .underline--bar { color: #ff5555; }
+.state-error * { scrollbar-color: #ff5555; scrollbar-color-active: #ff5555; scrollbar-color-hover: #ff5555; }
+
+.state-done #left { border-right: solid #56d364; }
+.state-done #search { border: round #56d364; }
+.state-done #left Tab.-active { color: #56d364; }
+.state-done #left Underline > .underline--bar { color: #56d364; }
+.state-done * { scrollbar-color: #56d364; scrollbar-color-active: #56d364; scrollbar-color-hover: #56d364; }
 
 #bottombar.narrow { layout: vertical; }
 #bottombar.narrow #hotkeys { width: 1fr; margin-bottom: 1; }

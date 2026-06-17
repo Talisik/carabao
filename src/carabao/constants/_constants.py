@@ -628,5 +628,80 @@ class Constants:
 
         return value
 
+    @property
+    def LOG_INCLUDE(self):
+        """
+        Log levels to include.
+
+        If non-empty, only logs whose level is in this set are shown
+        (allowlist). Comparison is case-insensitive. Defaults to empty,
+        meaning all levels pass except those in LOG_EXCLUDE.
+
+        Returns:
+            list[str]: Upper-cased level names to include.
+        """
+
+        key = "LOG_INCLUDE"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
+        self.load_env()
+
+        self.__values[key] = value = env(
+            key,
+            cast=_parse_levels,
+            default=[],
+        )
+
+        return value
+
+    @property
+    def LOG_EXCLUDE(self):
+        """
+        Log levels to exclude.
+
+        Logs whose level is in this set are hidden (denylist). Applied after
+        LOG_INCLUDE. Comparison is case-insensitive. Defaults to
+        ``["DEBUG", "TRACE"]``.
+
+        Returns:
+            list[str]: Upper-cased level names to exclude.
+        """
+
+        key = "LOG_EXCLUDE"
+
+        if key in self.__custom:
+            return self.__custom[key]
+
+        if key in self.__values:
+            return self.__values[key]
+
+        self.load_env()
+
+        self.__values[key] = value = env(
+            key,
+            cast=_parse_levels,
+            default=["DEBUG", "TRACE"],
+        )
+
+        return value
+
+
+def _parse_levels(value: str):
+    """
+    Parses a comma/newline-separated list of log level names into a list of
+    upper-cased, stripped names. Empty entries are dropped.
+    """
+
+    return [
+        item.strip().upper()
+        for item in re.split(r"[,\n]+", value)
+        if item.strip()
+    ]
+
 
 C = Constants()

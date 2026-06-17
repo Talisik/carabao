@@ -310,6 +310,10 @@ class UI(App):
         self._app_paused = False
         self._resume_gate = threading.Event()
         self._resume_gate.set()
+        # Drives the app accent color (left border / search border): a lane
+        # errored/terminated flips the theme red, the final result sets red/green.
+        self._errored = False
+        self._failed = False
         # Timer freezes while paused: total seconds spent paused, plus the
         # monotonic time the current pause began (None when not paused).
         self._paused_total = 0.0
@@ -796,6 +800,7 @@ class UI(App):
         failed = error_text is not None or error_count
         final = Text(elapsed, style="bold red" if failed else "bold green")
 
+        self._failed = bool(failed)
         self._finished = True
 
         # The app may already be shutting down; ignore if so.
@@ -805,6 +810,7 @@ class UI(App):
             self.call_from_thread(self._finalize_active)
             self.call_from_thread(self._status_bar.update, final)
             self.call_from_thread(self._render_bottom_bar)
+            self.call_from_thread(self._apply_theme_state)
         except Exception:
             pass
 
@@ -1106,6 +1112,7 @@ class UI(App):
 
                 if payload.get("errors"):
                     entry.error = True
+                    self._errored = True
 
                 if payload.get("work") is not None:
                     entry.work = payload.get("work")
@@ -1118,6 +1125,7 @@ class UI(App):
 
             if entry is not None:
                 entry.state = "terminated"
+                self._errored = True
 
                 self._active.discard(run_id)
                 self._render_node(entry)
@@ -1150,6 +1158,8 @@ class UI(App):
                 self._render_node(entry)
 
             self._sync_hotkeys()
+
+        self._apply_theme_state()
 
     def _node_markup(self, entry: _NodeState) -> str:
         """Console markup for a single node's label (name + state + timing)."""
@@ -1545,6 +1555,25 @@ class UI(App):
         self._hotkeys_len = len(plain)
         self._relayout_bottombar()
 
+    def _apply_theme_state(self):
+        # Recolor the app accent (left/search borders) to reflect pipeline state:
+        # paused -> orange, errored/failed -> red, cleanly done -> green,
+        # otherwise running (default blue accent, no class).
+        try:
+            screen = self.screen
+        except Exception:
+            return
+
+        for cls in ("state-paused", "state-error", "state-done"):
+            screen.remove_class(cls)
+
+        if self._finished:
+            screen.add_class("state-error" if self._failed else "state-done")
+        elif self._paused or self._app_paused:
+            screen.add_class("state-paused")
+        elif self._errored:
+            screen.add_class("state-error")
+
     def on_resize(self, event):
         self._relayout_bottombar()
 
@@ -1589,6 +1618,7 @@ class UI(App):
         self._resume_gate.clear()
         self._freeze_timer()
         self._render_bottom_bar()
+        self._apply_theme_state()
 
     def _resume_app(self):
         if not self._app_paused:
@@ -1598,6 +1628,7 @@ class UI(App):
         self._resume_gate.set()
         self._unfreeze_timer()
         self._render_bottom_bar()
+        self._apply_theme_state()
 
     def _levels_bar_text(self) -> Text:
         out = Text()

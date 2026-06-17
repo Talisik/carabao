@@ -287,8 +287,20 @@ class Core:
             try:
                 from loguru import logger
 
+                def _log_level_filter(record):
+                    name = record["level"].name.upper()
+
+                    include = C.LOG_INCLUDE
+                    if include and name not in include:
+                        return False
+
+                    return name not in C.LOG_EXCLUDE
+
                 logger.remove()
-                logger.add(sys.stderr, level="INFO")
+                # Sink at TRACE so LOG_INCLUDE/LOG_EXCLUDE fully control which
+                # levels show; the env defaults (exclude DEBUG/TRACE) reproduce
+                # the previous INFO floor.
+                logger.add(sys.stderr, level="TRACE", filter=_log_level_filter)
             except Exception:
                 pass
 
