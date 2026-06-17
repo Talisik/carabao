@@ -1,3 +1,0 @@
-include src/carabao/cli/display.tcss
-recursive-include src *.tcss 
-include src/carabao/cli/sample.carabao.cfg 
