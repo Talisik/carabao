@@ -10,6 +10,10 @@ from .constants import C
 from .errors import MissingEnvError
 from .settings import Settings
 
+# Set once we've wrapped logging.Logger.handle, so repeated Core.start()
+# calls don't stack the wrapper.
+_stdlib_logging_gated = False
+
 
 @final
 class Core:
@@ -319,9 +323,11 @@ class Core:
             # them; Logger.handle is the one chokepoint every logger calls
             # before dispatching to its handlers, regardless of propagate.
             try:
-                import logging
+                global _stdlib_logging_gated
 
-                if not getattr(logging.Logger, "_carabao_gated", False):
+                if not _stdlib_logging_gated:
+                    import logging
+
                     _orig_handle = logging.Logger.handle
 
                     def _gated_handle(self, record):
@@ -329,8 +335,8 @@ class Core:
                             return
                         return _orig_handle(self, record)
 
-                    logging.Logger.handle = _gated_handle
-                    logging.Logger._carabao_gated = True
+                    logging.Logger.handle = _gated_handle  # type: ignore[method-assign]
+                    _stdlib_logging_gated = True
             except Exception:
                 pass
 
