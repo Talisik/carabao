@@ -6,7 +6,6 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import (
     Button,
-    Footer,
     Input,
     Label,
     ListItem,
@@ -105,8 +104,6 @@ class Display(App):
         super().__init__(*args, ansi_color=True, **kwargs)
 
     def compose(self):
-        yield Footer()
-
         with Vertical():
             with Horizontal():
                 # Create ListView with template names

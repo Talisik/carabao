@@ -1,0 +1,14 @@
+{
+  "name": "carabao",
+  "owner": {
+    "name": "Talisik"
+  },
+  "plugins": [
+    {
+      "name": "carabao",
+      "source": "./plugins/carabao",
+      "description": "Skill teaching Claude how to build pub/sub apps with the carabao framework and its lane2lane (l2l) pipeline engine: the moo CLI, Lane / AsyncLane, the lanes priority map, Forms, settings, and db hubs.",
+      "category": "framework"
+    }
+  ]
+}

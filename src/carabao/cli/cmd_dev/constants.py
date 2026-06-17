@@ -56,13 +56,14 @@ NODE_ERROR = "#ff5555"  # errored or terminated (bright red)
 LANE_COL_MAX = 22
 
 #: Bottom-bar hotkey hints, per pipeline state.
-HOTKEYS_RUNNING = "[b]esc[/] quit   [b]/[/] search   [b]f[/] levels   [b]d[/] display"
+HOTKEYS_RUNNING = "[b]esc[/] pause   [b]/[/] search   [b]f[/] levels   [b]d[/] display"
 # Highlight "esc quit" once the pipeline is done — the user can safely exit.
 HOTKEYS_DONE = (
     "[b #ff4d4d]esc quit[/]   [b]/[/] search   [b]f[/] levels   [b]d[/] display"
 )
-# Shown while one or more lanes are parked at a breakpoint.
+# Shown while paused — either a lane parked at a breakpoint or the whole app
+# paused via Esc. Esc again quits; c/enter continues.
 HOTKEYS_PAUSED = (
-    "[b]esc[/] quit   [b]/[/] search   [b]f[/] levels   [b]d[/] display"
+    "[b #ff4d4d]esc quit[/]   [b]/[/] search   [b]f[/] levels   [b]d[/] display"
     "   [b #fbbf24]c continue[/]"
 )

@@ -26,6 +26,10 @@ class Core:
     __dev_mode = False
     __started = False
     __exit_on_finish: Optional[bool] = None
+    __single_run: Optional[bool] = None
+    __sleep_min: Optional[float] = None
+    __sleep_max: Optional[float] = None
+    __processes: Optional[int] = None
 
     def __init__(self):
         raise Exception("This is not instantiable!")
@@ -95,6 +99,10 @@ class Core:
         dev_mode: bool = False,
         test_mode: Optional[bool] = None,
         exit_on_finish: Optional[bool] = None,
+        single_run: Optional[bool] = None,
+        sleep_min: Optional[float] = None,
+        sleep_max: Optional[float] = None,
+        processes: Optional[int] = None,
     ):
         """
         Starts the framework with the specified settings.
@@ -108,6 +116,11 @@ class Core:
             test_mode: Whether to run in test mode
             exit_on_finish: Overrides the EXIT_ON_FINISH setting when not None.
                 The UI passes False so the loop never calls exit().
+            single_run: Overrides the SINGLE_RUN setting when not None (the dev
+                selector's toggle passes it).
+            sleep_min: Overrides the SLEEP_MIN setting when not None.
+            sleep_max: Overrides the SLEEP_MAX setting when not None.
+            processes: Overrides the PROCESSES setting when not None.
         """
 
         cls.initialize(
@@ -123,6 +136,10 @@ class Core:
         cls.__dev_mode = dev_mode
         cls.__test_mode = test_mode
         cls.__exit_on_finish = exit_on_finish
+        cls.__single_run = single_run
+        cls.__sleep_min = sleep_min
+        cls.__sleep_max = sleep_max
+        cls.__processes = processes
 
         cls.__start()
 
@@ -299,11 +316,31 @@ class Core:
             else settings.value_of("EXIT_ON_FINISH")
         )
 
+        run_once = (
+            cls.__single_run
+            if cls.__single_run is not None
+            else settings.value_of("SINGLE_RUN")
+        )
+
+        processes = (
+            cls.__processes
+            if cls.__processes is not None
+            else settings.value_of("PROCESSES")
+        )
+
         main = LazyMain(
             main=cls.__run_lanes,
-            run_once=settings.value_of("SINGLE_RUN"),
-            sleep_min=lambda: settings.value_of("SLEEP_MIN"),
-            sleep_max=lambda: settings.value_of("SLEEP_MAX"),
+            run_once=run_once,
+            sleep_min=lambda: (
+                cls.__sleep_min
+                if cls.__sleep_min is not None
+                else settings.value_of("SLEEP_MIN")
+            ),
+            sleep_max=lambda: (
+                cls.__sleep_max
+                if cls.__sleep_max is not None
+                else settings.value_of("SLEEP_MAX")
+            ),
             exit_on_finish=exit_on_finish,
             exit_delay=settings.value_of("EXIT_DELAY"),
             error_handler=settings.error_handler,
@@ -313,7 +350,7 @@ class Core:
             loop(
                 C.QUEUE_NAME,
                 print_lanes=False,
-                processes=settings.value_of("PROCESSES"),
+                processes=processes,
             )
 
         try:

@@ -71,6 +71,25 @@ Core: `fun-things`, `lazy-main`, `python-dotenv`, `typing-extensions`, `typer`,
 
 `standard` extra (interactive UI): `textual`, `textual-slider`.
 
+## Claude Code skill
+
+This repo ships a [Claude Code](https://claude.com/claude-code) skill that
+teaches Claude how to use carabao **and** its underlying lane2lane (`l2l`)
+pipeline engine — the `moo` CLI, lanes, priorities, Forms, settings, and the
+database hubs. Once installed, Claude applies it automatically when you work on
+a carabao or lane2lane project.
+
+The skill is distributed as a Claude Code plugin (not via `pip`). Run these
+commands **inside Claude Code** (they are slash commands, not shell commands):
+
+```
+/plugin marketplace add Talisik/carabao
+/plugin install carabao@carabao
+```
+
+The skill activates automatically based on the project you're in. To invoke it
+manually, run `/carabao:carabao`.
+
 ## Usage
 
 ### Basic Usage

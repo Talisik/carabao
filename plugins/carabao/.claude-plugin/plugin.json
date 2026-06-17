@@ -1,0 +1,10 @@
+{
+  "name": "carabao",
+  "description": "Build pub/sub apps with the carabao framework: lanes, Forms, settings, database hubs, and the moo CLI.",
+  "author": {
+    "name": "Talisik"
+  },
+  "homepage": "https://github.com/Talisik/carabao",
+  "repository": "https://github.com/Talisik/carabao",
+  "license": "MIT"
+}

@@ -1,7 +1,7 @@
 import asyncio
 import os
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Tuple, Type
+from typing import Any, Callable, Dict, Optional, Tuple, Type
 
 from l2l import AsyncLane, Lane, Mock
 from l2l.types import LaneDictType
@@ -11,7 +11,6 @@ from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import (
     Button,
-    Footer,
     Input,
     Label,
     ListItem,
@@ -40,6 +39,10 @@ class Result:
     raw_form: dict[str, str]
     ui: bool = False
     log_file: bool = False
+    single_run: bool = True
+    sleep_min: Optional[float] = None
+    sleep_max: Optional[float] = None
+    processes: Optional[int] = None
 
 
 class Display(App[Result]):
@@ -132,40 +135,111 @@ class Display(App[Result]):
             id="run",
         )
 
-        with Horizontal(
-            classes="switch",
-        ):
-            self.test_mode = Switch(
-                SECRET_CFG.test_mode,
-            )
-
-            yield self.test_mode
-            yield Label("🧪 Test")
-
-        with Horizontal(
-            classes="switch",
-        ):
-            self.ui = Switch(
-                SECRET_CFG.ui,
-            )
-
-            yield self.ui
-            yield Label("📊 UI")
-
-        with Horizontal(
-            classes="switch",
-        ):
-            self.log_file = Switch(
-                SECRET_CFG.log_file,
-            )
-
-            yield self.log_file
-            yield Label("📄 Log")
-
         yield Button.error(
             "\\[Esc] Exit",
             id="exit",
         )
+
+    def __compose_setting(self, switch: Switch, label: str, description: str):
+        with Vertical(classes="setting"):
+            with Horizontal(classes="switch"):
+                yield switch
+                yield Label(label)
+
+            yield Label(description, classes="setting-desc")
+
+    def __compose_value_setting(
+        self, input_widget: Input, label: str, description: str
+    ):
+        with Vertical(classes="setting"):
+            yield Label(label, classes="setting-title")
+            yield input_widget
+            yield Label(description, classes="setting-desc")
+
+    def __compose_settings(self):
+        with Container(id="settings-container"):
+            self.test_mode = Switch(SECRET_CFG.test_mode)
+            yield from self.__compose_setting(
+                self.test_mode,
+                "🧪 Test",
+                "Run the lane in test mode.",
+            )
+
+            self.ui = Switch(SECRET_CFG.ui)
+            yield from self.__compose_setting(
+                self.ui,
+                "📊 UI",
+                "Show the live lane tree and log dashboard.",
+            )
+
+            self.log_file = Switch(SECRET_CFG.log_file)
+            yield from self.__compose_setting(
+                self.log_file,
+                "📄 Log",
+                "Stream this run's logs to a file (moo.log).",
+            )
+
+            self.single_run = Switch(SECRET_CFG.single_run)
+            yield from self.__compose_setting(
+                self.single_run,
+                "🔂 Single Run",
+                "Run once instead of looping continuously.",
+            )
+
+            self.sleep_min = Input(
+                SECRET_CFG.sleep_min,
+                type="number",
+                classes="setting-input",
+            )
+            yield from self.__compose_value_setting(
+                self.sleep_min,
+                "💤 Sleep Min",
+                "Min seconds to wait between loop iterations.",
+            )
+
+            self.sleep_max = Input(
+                SECRET_CFG.sleep_max,
+                type="number",
+                classes="setting-input",
+            )
+            yield from self.__compose_value_setting(
+                self.sleep_max,
+                "💤 Sleep Max",
+                "Max seconds to wait between loop iterations.",
+            )
+
+            cpu_count = os.cpu_count() or 1
+
+            try:
+                processes_value = int(SECRET_CFG.processes)
+            except (TypeError, ValueError):
+                processes_value = 0
+
+            processes_value = max(0, min(processes_value, cpu_count))
+
+            with Vertical(classes="setting"):
+                yield Label("⚙️ Processes", classes="setting-title")
+
+                with Horizontal(classes="slider-container"):
+                    self.processes = Slider(
+                        value=processes_value,
+                        name="processes",
+                        min=0,
+                        max=cpu_count,
+                        step=1,
+                    )
+
+                    yield self.processes
+                    yield Label(
+                        self.__processes_label(processes_value),
+                        classes="processes-value slider-label",
+                    )
+
+                yield Label(
+                    f"Worker processes for multiprocessing lanes "
+                    f"(0 = off, max {cpu_count}).",
+                    classes="setting-desc",
+                )
 
     def __compose_form(self):
         with Container(id="form-container"):
@@ -191,8 +265,6 @@ class Display(App[Result]):
         if not self.queue_names:
             raise Exception("No lanes found!")
 
-        yield Footer()
-
         with Vertical():
             with Horizontal():
                 yield from self.__compose_lane_list()
@@ -203,6 +275,9 @@ class Display(App[Result]):
 
                     with TabPane("Form"):
                         yield from self.__compose_form()
+
+                    with TabPane("Settings"):
+                        yield from self.__compose_settings()
 
             with Horizontal(id="navi-container"):
                 yield from self.__compose_navi()
@@ -477,6 +552,15 @@ class MyLane(Lane):
         if name is None:
             return
 
+        # The Processes settings slider isn't a form field — just refresh its
+        # value label ("off" at 0) and stop before the form-name parsing.
+        if name == "processes":
+            self.query_one(".processes-value", Label).update(
+                self.__processes_label(event.slider.value)
+            )
+
+            return
+
         self.query_one(
             f".{name}-value",
             Label,
@@ -510,8 +594,25 @@ class MyLane(Lane):
                 raw_form={name: field[0] for name, field in _form.items()},
                 ui=self.ui.value,
                 log_file=self.log_file.value,
+                single_run=self.single_run.value,
+                sleep_min=self.__parse_float(self.sleep_min.value),
+                sleep_max=self.__parse_float(self.sleep_max.value),
+                # Slider 0 means "off" → None, so Core uses the env default.
+                processes=self.processes.value or None,
             ),
         )
+
+    @staticmethod
+    def __parse_float(value: str) -> Optional[float]:
+        # Blank/invalid → None, so Core falls back to the env/setting default.
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def __processes_label(value: int) -> str:
+        return "off" if value <= 0 else str(value)
 
     async def __update(self, list_view: ListView):
         if list_view.id != "lanes":

@@ -23,10 +23,16 @@ Screen { background: transparent; }
 #log { height: 1fr; background: transparent; }
 #log-content { width: 1fr; height: auto; background: transparent; }
 
-/* Bottom bar: hotkeys (left) … mode + timer (right). */
-#bottombar { dock: bottom; height: 1; margin-top: 1; background: transparent; }
-#hotkeys { width: auto; color: $text-muted; margin-left: 1; }
+/* Bottom bar: hotkeys (left) … mode + timer (right). One row when it fits;
+   when the terminal is too narrow it gets the `narrow` class and stacks
+   vertically (hotkeys wrap to full width, the right group drops below). */
+#bottombar { dock: bottom; height: auto; margin-top: 1; background: transparent; }
+#hotkeys { width: auto; height: auto; color: $text-muted; margin-left: 1; }
 #bottombar-spacer { width: 1fr; }
 #stats { width: auto; color: $text-muted; margin-right: 2; }
 #mode { width: auto; margin-right: 2; }
 #status { width: auto; color: $text-muted; margin-right: 1; }
+
+#bottombar.narrow { layout: vertical; }
+#bottombar.narrow #hotkeys { width: 1fr; margin-bottom: 1; }
+#bottombar.narrow #bottombar-spacer { display: none; }

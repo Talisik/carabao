@@ -29,12 +29,9 @@ from textual.containers import (
     VerticalScroll,
 )
 from textual.geometry import Offset
-from textual.screen import ModalScreen
 from textual.selection import Selection
 from textual.widgets import (
-    Button,
     Input,
-    Label,
     Static,
     TabbedContent,
     TabPane,
@@ -186,54 +183,6 @@ class _LogStatic(Static):
         return start, end
 
 
-class _ConfirmQuit(ModalScreen[bool]):
-    """Confirmation shown when quitting while the pipeline is still running."""
-
-    CSS = """
-    $accent: #3b82f6;
-    _ConfirmQuit { align: center middle; }
-    #confirm-box {
-        width: 48; height: auto; padding: 1 2;
-        border: round $accent; background: $surface;
-    }
-    #confirm-box Label { width: 100%; text-align: center; margin-bottom: 1; }
-    #confirm-buttons { height: auto; align: center middle; }
-    #confirm-buttons Button { margin: 0 1; border: none; height: 3; content-align: center middle; color: white; text-style: bold; }
-    #confirm-yes { background: #f85149; }
-    #confirm-yes:hover { background: #ff6b61; }
-    #confirm-no { background: $accent; }
-    #confirm-no:hover { background: #5a9bf8; }
-    """
-
-    BINDINGS: ClassVar[List[BindingType]] = [
-        Binding("escape", "cancel", "Cancel"),
-        Binding("y", "confirm", "Quit"),
-        Binding("n", "cancel", "Cancel"),
-    ]
-
-    def compose(self):
-        with Vertical(id="confirm-box"):
-            yield Label("Pipeline is still running.\nQuit anyway?")
-
-            with Horizontal(id="confirm-buttons"):
-                yield Button("\\[y] Quit", variant="error", id="confirm-yes")
-                yield Button("\\[n] Cancel", variant="primary", id="confirm-no")
-
-    @on(Button.Pressed, "#confirm-yes")
-    def _yes(self):
-        self.dismiss(True)
-
-    @on(Button.Pressed, "#confirm-no")
-    def _no(self):
-        self.dismiss(False)
-
-    def action_confirm(self):
-        self.dismiss(True)
-
-    def action_cancel(self):
-        self.dismiss(False)
-
-
 # Display toggles: (label, option, hotkey, UI state attribute).
 _DISPLAY_TOGGLES = [
     ("panel", "panel", "p", "_show_panel"),
@@ -295,7 +244,7 @@ class UI(App):
     AUTO_FOCUS = None
 
     BINDINGS: ClassVar[List[BindingType]] = [
-        Binding("escape", "request_quit", "Quit", priority=True),
+        Binding("escape", "request_quit", "Pause/Quit", priority=True),
         Binding("slash", "focus_search", "Search"),
         Binding("f", "filter_bar('levels')", "Levels"),
         Binding("d", "filter_bar('display')", "Display"),
@@ -355,6 +304,12 @@ class UI(App):
         self._active: set = set()
         # run_ids currently parked at a breakpoint (dev-only).
         self._paused: set = set()
+        # Whole-app pause toggled by Esc (distinct from per-lane breakpoints).
+        # While set, the worker thread blocks on _resume_gate at the next lane
+        # event, so the pipeline halts. The gate starts open (set) = running.
+        self._app_paused = False
+        self._resume_gate = threading.Event()
+        self._resume_gate.set()
         # Timer freezes while paused: total seconds spent paused, plus the
         # monotonic time the current pause began (None when not paused).
         self._paused_total = 0.0
@@ -399,6 +354,9 @@ class UI(App):
         self._finished = False
         # Bottom-bar mode: "normal" hotkeys, or "levels"/"display" filter strips.
         self._bar_mode = "normal"
+        # Visible length of the current hotkeys text, to decide when the bottom
+        # bar must stack vertically (narrow terminals).
+        self._hotkeys_len = len(Text.from_markup(HOTKEYS_RUNNING).plain)
         # Optional log-to-file streaming (moo.log, moo2.log, …).
         self._log_file_enabled = log_file
         self._log_fp = None
@@ -666,6 +624,8 @@ class UI(App):
     def on_unmount(self):
         # Release anything parked at a breakpoint so the worker thread can end.
         events.disable_breakpoints()
+        # Open the app-pause gate too, so a worker blocked in _on_event unwinds.
+        self._resume_gate.set()
         events.unsubscribe(self._on_event)
 
         # If the user quit mid-run (e.g. SINGLE_RUN=False, several loops in), the
@@ -880,6 +840,10 @@ class UI(App):
     # ---- l2l callbacks (fire on the worker thread) -----------------------
 
     def _on_event(self, kind: str, payload: dict):
+        # Worker thread. Block here while the app is Esc-paused so the pipeline
+        # halts at the next lane boundary; the UI thread keeps handling keys and
+        # releases the gate on resume/quit. No-op (gate open) when running.
+        self._resume_gate.wait()
         self.call_from_thread(self._apply_event, kind, payload)
 
     def _on_log(self, level: str, message: str, source: Optional[str] = None):
@@ -1058,10 +1022,20 @@ class UI(App):
         # node isn't in _run_to_node yet. Match the pre-built node by name
         # anywhere in the structure instead of orphaning it to a root duplicate.
         if match is None and parent_id and parent is None:
+            claimed_fallback = None
             for cand in self._struct_by_name.get(name, ()):
                 if id(cand) not in self._claimed:
                     match = cand
                     break
+                if claimed_fallback is None:
+                    claimed_fallback = cand
+            # Every candidate already claimed — this is a re-run of the same
+            # before-lane (its parent re-runs each iteration with a fresh
+            # run_id and still emits after the child, so the parent is never
+            # in _run_to_node here). Reuse the node and bump `runs` instead of
+            # orphaning a duplicate to the tree root.
+            if match is None:
+                match = claimed_fallback
 
         if match is not None:
             self._claimed.add(id(match))
@@ -1157,21 +1131,14 @@ class UI(App):
             self._stamp_order(entry)
             self._active.discard(run_id)
 
-            # Freeze the timer at the first concurrent pause.
-            if not self._paused:
-                self._pause_started = monotonic()
-
+            self._freeze_timer()
             self._paused.add(run_id)
             self._render_node(entry)
             self._sync_hotkeys()
 
         elif kind == "lane_resumed":
             self._paused.discard(run_id)
-
-            # Resume the timer once nothing is paused anymore.
-            if not self._paused and self._pause_started is not None:
-                self._paused_total += monotonic() - self._pause_started
-                self._pause_started = None
+            self._unfreeze_timer()
 
             entry = self._run_to_node.get(run_id)
 
@@ -1562,15 +1529,75 @@ class UI(App):
             pass
 
         if self._bar_mode == "levels":
-            self._hotkeys.update(self._levels_bar_text())
+            content = self._levels_bar_text()
         elif self._bar_mode == "display":
-            self._hotkeys.update(self._display_bar_text())
+            content = self._display_bar_text()
         elif self._finished:
-            self._hotkeys.update(HOTKEYS_DONE)
-        elif self._paused:
-            self._hotkeys.update(HOTKEYS_PAUSED)
+            content = HOTKEYS_DONE
+        elif self._paused or self._app_paused:
+            content = HOTKEYS_PAUSED
         else:
-            self._hotkeys.update(HOTKEYS_RUNNING)
+            content = HOTKEYS_RUNNING
+
+        self._hotkeys.update(content)
+
+        plain = content.plain if isinstance(content, Text) else Text.from_markup(content).plain
+        self._hotkeys_len = len(plain)
+        self._relayout_bottombar()
+
+    def on_resize(self, event):
+        self._relayout_bottombar()
+
+    def _relayout_bottombar(self):
+        # Stack the bar vertically once the hotkeys (plus a rough allowance for
+        # the right-hand stats/mode/timer group) no longer fit on one row.
+        width = self.size.width
+
+        if not width:
+            return
+
+        try:
+            bar = self.query_one("#bottombar")
+        except Exception:
+            return
+
+        needed = self._hotkeys_len + 44  # right group + margins, approx
+        bar.set_class(width < needed, "narrow")
+
+    def _freeze_timer(self):
+        # Pin the elapsed clock at the first concurrent pause (breakpoint or
+        # whole-app). Idempotent — later pauses keep the earliest start.
+        if self._pause_started is None:
+            self._pause_started = monotonic()
+
+    def _unfreeze_timer(self):
+        # Resume the clock only once nothing is paused anymore.
+        if (
+            not self._paused
+            and not self._app_paused
+            and self._pause_started is not None
+        ):
+            self._paused_total += monotonic() - self._pause_started
+            self._pause_started = None
+
+    def _pause_app(self):
+        # Esc-pause the whole pipeline: the worker blocks at the next lane event.
+        if self._app_paused or self._finished:
+            return
+
+        self._app_paused = True
+        self._resume_gate.clear()
+        self._freeze_timer()
+        self._render_bottom_bar()
+
+    def _resume_app(self):
+        if not self._app_paused:
+            return
+
+        self._app_paused = False
+        self._resume_gate.set()
+        self._unfreeze_timer()
+        self._render_bottom_bar()
 
     def _levels_bar_text(self) -> Text:
         out = Text()
@@ -1600,7 +1627,11 @@ class UI(App):
         return out
 
     def action_continue_lane(self):
-        # Release every lane parked at a breakpoint.
+        # Resume an Esc-paused pipeline and release any lane parked at a
+        # breakpoint — c / enter covers both kinds of pause.
+        if self._app_paused:
+            self._resume_app()
+
         if self._paused:
             events.resume_all()
 
@@ -1656,8 +1687,7 @@ class UI(App):
         self._left.active = tabs[(index + step) % len(tabs)]
 
     def action_request_quit(self):
-        # A modal is open (confirm) — Esc closes it, not the app.
-        # (The app's escape binding is priority, so it runs before the modal's.)
+        # A screen is open on top — Esc closes it, not the app.
         if len(self.screen_stack) > 1:
             self.pop_screen()
 
@@ -1678,14 +1708,19 @@ class UI(App):
 
             return
 
-        # Quit immediately once the run is done; otherwise confirm first.
+        # Once the run is done, Esc quits straight away.
         if self._finished:
             self.exit()
 
             return
 
-        def _on_result(confirmed: Optional[bool]):
-            if confirmed:
-                self.exit()
+        # Esc while paused (by Esc) quits; otherwise the first Esc pauses the
+        # pipeline and surfaces the "c continue" hotkey, like a breakpoint.
+        if self._app_paused:
+            # Open the gate so the blocked worker can unwind during teardown.
+            self._resume_gate.set()
+            self.exit()
 
-        self.push_screen(_ConfirmQuit(), _on_result)
+            return
+
+        self._pause_app()

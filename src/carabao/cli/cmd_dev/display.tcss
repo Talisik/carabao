@@ -41,6 +41,30 @@ Button:focus {
     overflow: auto;
 }
 
+#settings-container {
+    overflow: auto;
+}
+
+.setting {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.setting-title {
+    text-style: bold;
+    margin-left: 1;
+}
+
+.setting-input {
+    width: 50%;
+    margin: 0 0 0 1;
+}
+
+.setting-desc {
+    color: $text-muted;
+    margin-left: 4;
+}
+
 .info-label {
     text-style: bold;
 }

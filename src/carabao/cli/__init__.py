@@ -124,6 +124,31 @@ def dev(
         value=str(result.log_file),
     )
 
+    SECRET_CFG.write(
+        section=SECRET_CFG.SINGLE_RUN,
+        key=SECRET_CFG.SINGLE_RUN,
+        value=str(result.single_run),
+    )
+
+    # Numeric overrides: store blank when unset so the env/setting default wins.
+    SECRET_CFG.write(
+        section=SECRET_CFG.SLEEP_MIN,
+        key=SECRET_CFG.SLEEP_MIN,
+        value="" if result.sleep_min is None else str(result.sleep_min),
+    )
+
+    SECRET_CFG.write(
+        section=SECRET_CFG.SLEEP_MAX,
+        key=SECRET_CFG.SLEEP_MAX,
+        value="" if result.sleep_max is None else str(result.sleep_max),
+    )
+
+    SECRET_CFG.write(
+        section=SECRET_CFG.PROCESSES,
+        key=SECRET_CFG.PROCESSES,
+        value="" if result.processes is None else str(result.processes),
+    )
+
     for key, value in result.raw_form.items():
         SECRET_CFG.write(
             section=f"{result.name}{SECRET_CFG.FORM}",
@@ -151,6 +176,10 @@ def dev(
                 dev_mode=True,
                 test_mode=result.test_mode,
                 exit_on_finish=False,
+                single_run=result.single_run,
+                sleep_min=result.sleep_min,
+                sleep_max=result.sleep_max,
+                processes=result.processes,
             ),
             title=result.name,
             lanes=[result.lane],
@@ -171,6 +200,10 @@ def dev(
                 name=result.name,
                 dev_mode=True,
                 test_mode=result.test_mode,
+                single_run=result.single_run,
+                sleep_min=result.sleep_min,
+                sleep_max=result.sleep_max,
+                processes=result.processes,
             )
         finally:
             if stream is not None:
