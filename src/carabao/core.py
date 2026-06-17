@@ -284,23 +284,53 @@ class Core:
         """
 
         if not C.IN_DEVELOPMENT and not C.TESTING:
+
+            def _level_name_allowed(name: str) -> bool:
+                """Apply LOG_INCLUDE (allowlist) then LOG_EXCLUDE (denylist)."""
+                name = name.upper()
+
+                include = C.LOG_INCLUDE
+                if include and name not in include:
+                    return False
+
+                return name not in C.LOG_EXCLUDE
+
             try:
                 from loguru import logger
-
-                def _log_level_filter(record):
-                    name = record["level"].name.upper()
-
-                    include = C.LOG_INCLUDE
-                    if include and name not in include:
-                        return False
-
-                    return name not in C.LOG_EXCLUDE
 
                 logger.remove()
                 # Sink at TRACE so LOG_INCLUDE/LOG_EXCLUDE fully control which
                 # levels show; the env defaults (exclude DEBUG/TRACE) reproduce
                 # the previous INFO floor.
-                logger.add(sys.stderr, level="TRACE", filter=_log_level_filter)
+                logger.add(
+                    sys.stderr,
+                    level="TRACE",
+                    filter=lambda record: _level_name_allowed(
+                        record["level"].name
+                    ),
+                )
+            except Exception:
+                pass
+
+            # Gate ALL stdlib logging (pymongo, elasticsearch, urllib3, the
+            # fun-things OTLPHelper, ...) by the same LOG_INCLUDE/LOG_EXCLUDE
+            # level rules. Those loggers commonly set their own level/handlers
+            # and disable propagation, so a root-logger filter won't reach
+            # them; Logger.handle is the one chokepoint every logger calls
+            # before dispatching to its handlers, regardless of propagate.
+            try:
+                import logging
+
+                if not getattr(logging.Logger, "_carabao_gated", False):
+                    _orig_handle = logging.Logger.handle
+
+                    def _gated_handle(self, record):
+                        if not _level_name_allowed(record.levelname):
+                            return
+                        return _orig_handle(self, record)
+
+                    logging.Logger.handle = _gated_handle
+                    logging.Logger._carabao_gated = True
             except Exception:
                 pass
 
