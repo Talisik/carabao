@@ -2,6 +2,52 @@
 requires = ["setuptools>=42.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "carabao"
+version = "2.7.0"
+description = "Moooove your data with ease using our udderly simple pipeline framework."
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [{ name = "Talisik Team" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+    "fun-things==1.2.*",
+    "lazy-main==0.6.*",
+    "python-dotenv",
+    "typing-extensions",
+    "typer",
+    "lane2lane==2.4.*",
+]
+
+[project.optional-dependencies]
+standard = [
+    "textual",
+    "textual-slider",
+]
+
+[project.scripts]
+carabao = "carabao.cli:app"
+moo = "carabao.cli:app"
+
+[tool.setuptools]
+zip-safe = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["*.tcss", "*.cfg"]
+
 [tool.mypy]
 mypy_path = "src"
 check_untyped_defs = true
@@ -15,3 +61,8 @@ warn_return_any = true
 warn_unreachable = true
 warn_unused_configs = true
 no_implicit_reexport = true
+
+[dependency-groups]
+dev = [
+    "twine>=6.1.0",
+]
